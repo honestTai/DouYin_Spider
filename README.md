@@ -186,29 +186,75 @@ python quick_publish.py
 
 `dy_mcp/server.py` 只向 Agent 暴露一个 `run_engagement` 工具，流程为“关键词搜索相关作品 → 发布评论 → 私信作品作者”。需要 Python 3.10+，安装 `requirements.txt` 中的依赖后，在 `.env` 配置 `DY_COOKIES` 及写接口所需的同会话凭据。
 
-可选代理池使用 JSON 数组或逗号分隔地址：
+可选代理池使用 JSON 数组或逗号分隔地址。同一 Cookie 固定分配到同一个代理，搜索、评论、私信及签名辅助请求不会在执行过程中切换出口 IP：
 
 ```dotenv
 DY_PROXY_POOL='["http://user:pass@proxy-one:8080", "http://user:pass@proxy-two:8080"]'
 ```
 
-同一 Cookie 会固定分配到同一个代理，搜索、评论和私信不会在执行过程中切换出口 IP。
+#### 安装到 Agent
 
-在支持 MCP 的客户端中加入以下配置（路径替换为本机实际路径）：
+在项目根目录使用项目的虚拟环境 Python 执行安装器。安装器只写启动配置，不会复制 Cookie 或代理密码。
+
+```bash
+# Kimi Code：写入当前项目 .kimi-code/mcp.json
+.venv/bin/python -m dy_mcp.install --agent kimi
+
+# Codex：通过 codex CLI 写入用户级配置
+.venv/bin/python -m dy_mcp.install --agent codex
+
+# Claude Code：通过 claude CLI 写入当前项目的 local 配置
+.venv/bin/python -m dy_mcp.install --agent claude
+
+# 依次安装以上三种；某个 CLI 不存在不会中断其他安装
+.venv/bin/python -m dy_mcp.install --agent all
+
+# 输出给其他 MCP 客户端使用的通用 JSON 配置
+.venv/bin/python -m dy_mcp.install --agent json
+```
+
+也可以直接用 `.venv/bin/python mcp_server.py` 启动 stdio 服务。该入口不要求调用方位于项目目录，会固定从项目根目录加载 `.env`。
+
+安装后重新启动对应 Agent 或新开会话：
+
+- Kimi Code：输入 `/mcp` 查看连接状态。
+- Codex：执行 `codex mcp list`，或在 TUI 输入 `/mcp`。
+- Claude Code：执行 `claude mcp list` 检查连接；项目配置如提示审批，需要先确认信任。
+
+#### 工具参数
+
+- `query`：搜索关键词，必填。
+- `comment_text`：发布到每个作品评论区的文本，必填。
+- `message_text`：发送给每个作品作者的私信文本，必填。
+- `limit`：最多处理作品数，默认 3，范围 1–20。
+- `dry_run`：默认 `true`，只搜索和预览，不执行写操作。
+- `confirm`：默认 `false`；真实执行必须同时设置 `dry_run=false`、`confirm=true`。
+- `sort_type`：`0` 综合、`1` 最多点赞、`2` 最新发布。
+- `publish_time`：`0` 不限、`1` 一天内、`7` 一周内、`180` 半年内。
+- `interval_seconds`：每个作品之间的等待秒数，默认 3，范围 0–60。
+
+预览调用示例：
 
 ```json
 {
-  "mcpServers": {
-    "douyin-engagement": {
-      "command": "/absolute/path/DouYin_Spider/.venv/bin/python",
-      "args": ["-m", "dy_mcp.server"],
-      "cwd": "/absolute/path/DouYin_Spider"
-    }
-  }
+  "query": "榴莲",
+  "comment_text": "评论文案",
+  "message_text": "私信文案",
+  "limit": 3,
+  "dry_run": true
 }
 ```
 
-也可以直接用 `python -m dy_mcp.server` 启动 stdio 服务。工具默认 `dry_run=true`，只返回候选作品，不发布内容。真实执行需要同时传入 `dry_run=false`、`confirm=true`、`comment_text` 和 `message_text`；单次最多处理 20 个作品，任一作品失败后立即停止。请先用预览结果确认目标与文案。
+也可以直接对 Agent 说：“使用 douyin-engagement 搜索榴莲相关作品，只预览 3 个结果，不实际评论或私信。”确认候选作品和文案后，使用相同参数并改为以下两项才会真实执行：
+
+```json
+{
+  "dry_run": false,
+  "confirm": true
+}
+```
+
+结果中的 `comment_status` 和 `message_status` 分别记录评论、私信状态。任一作品失败后立即停止；`failed` 表示没有写入成功，`partial` 表示部分操作已经写入，`completed` 表示请求的作品均已完成。线上执行前应先用 `limit=1` 验证账号凭据与目标。
 
 ### 🗝️注意事项
 - `main.py` 是爬虫入口，可根据需求自行修改调用

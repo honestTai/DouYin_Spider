@@ -1,5 +1,6 @@
 import os
 import threading
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -8,7 +9,8 @@ from .proxy_pool import ProxyPool
 
 class DouyinSession:
     def __init__(self):
-        load_dotenv()
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+        load_dotenv(env_path)
         self._pool = ProxyPool()
         self._auth = None
         self._session_key = None

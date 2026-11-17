@@ -58,3 +58,6 @@ datas
 live.*.log
 live.*.json
 live.*/
+
+# 本机 Agent MCP 启动配置包含绝对路径，不随仓库共享
+/.kimi-code/mcp.json
