@@ -344,3 +344,30 @@ def test_missing_saved_runtime_reports_rebind_and_skips_scheduler(tmp_path):
     assert store.get_account(account["id"])["status"] == "authentication_required"
     assert selected is None
     loader.assert_not_called()
+
+
+def test_hashtag_strategy_keeps_top_five_ranking_without_engagement_filters(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(
+        store, keywords=["ai", "ai知识", "vibecoding大赏"],
+        content_strategy="hashtag", candidate_pool_size=5, batch_size=5,
+        min_digg_count=1000000, max_comment_count=0,
+    )
+    api = Mock()
+    api.search_some_general_work.return_value = [
+        work(f"rank-{index}", 0, 100000) for index in range(1, 7)
+    ]
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"])
+
+    assert result["status"] == "preview"
+    assert result["content_strategy"] == "hashtag"
+    assert result["publish_time"] == "0"
+    assert [item["aweme_id"] for item in result["works"]] == [
+        "rank-1", "rank-2", "rank-3", "rank-4", "rank-5",
+    ]
+    assert result["planned_count"] == 5
+    assert result["searched_keywords"] == [{"keyword": "ai", "strategy": "hashtag"}]
+    api.search_some_general_work.assert_called_once()
+    assert api.search_some_general_work.call_args.args[1:] == ("#ai", 5, "0", "0")

@@ -263,6 +263,8 @@ score = digg_count / (comment_count + 1)
 
 账号也可设置 `content_strategy="latest"` 使用截评策略：搜索最近 24 小时内内容（`sort_type=2`、`publish_time=1`），保留接口的最新发布顺序，不再按互动比值重排。点赞下限、评论上限和账号级去重仍然生效。最新搜索无候选时会继续遍历该账号的剩余关键词，并回退到高赞低评搜索；全部搜索仍无候选时记录 `no_candidates`，不重复评论旧作品。
 
+设置 `content_strategy="hashtag"` 使用热门标签排名策略：将 `keywords` 配置为 `ai`、`ai知识`、`vibecoding大赏` 等标签，实际使用 `#标签` 搜索，按抖音综合排名保留前 `candidate_pool_size` 个作品。设置为 `5` 即每轮取排名前五，不按点赞评论比值重排，也不应用点赞下限、评论上限或 24 小时时间限制；账号级去重仍然生效，已评论作品会跳过，所有标签均无新作品时记录 `no_candidates`。
+
 默认配置：
 
 ```text

@@ -192,8 +192,8 @@ class AccountStore:
             raise ValueError("AdsPower 账号必须配置 profile_id 或 profile_no")
         if browser_type in {"chrome", "edge", "firefox"} and not cdp_url:
             raise ValueError("本地浏览器账号必须配置 cdp_url；Firefox 使用 BiDi WebSocket 地址")
-        if content_strategy not in {"engagement", "latest"}:
-            raise ValueError("content_strategy 只支持 engagement 或 latest")
+        if content_strategy not in {"engagement", "latest", "hashtag"}:
+            raise ValueError("content_strategy 只支持 engagement、latest 或 hashtag")
         if not 1 <= batch_size <= 10:
             raise ValueError("batch_size 必须在 1 到 10 之间")
         if not 0 <= batch_interval_seconds <= 300:

@@ -124,27 +124,37 @@ class MultiAccountEngine:
                 }]
             else:
                 latest = actual_strategy == "latest"
-                strategy_options = [("latest", "2", "1"), ("engagement", "1", "0")] \
-                    if latest else [("engagement", "1", "0")]
+                hashtag = actual_strategy == "hashtag"
+                if latest:
+                    strategy_options = [("latest", "2", "1"), ("engagement", "1", "0")]
+                elif hashtag:
+                    strategy_options = [("hashtag", "0", "0")]
+                else:
+                    strategy_options = [("engagement", "1", "0")]
                 start = previous_runs % len(account["keywords"])
                 keywords = account["keywords"][start:] + account["keywords"][:start]
                 candidates = []
                 for search_keyword in keywords:
                     for strategy, sort_type, publish_time in strategy_options:
                         searched_keywords.append({"keyword": search_keyword, "strategy": strategy})
+                        query = f"#{search_keyword.lstrip('#')}" if strategy == "hashtag" else search_keyword
                         works = self.api.search_some_general_work(
-                            auth, search_keyword, account["candidate_pool_size"],
+                            auth, query, account["candidate_pool_size"],
                             sort_type, publish_time,
                         )
                         candidates = [candidate_from_search(item) for item in works]
                         candidates = [item for item in candidates if item]
                         candidates = [
                             item for item in candidates
-                            if item["digg_count"] >= account["min_digg_count"]
-                            and item["comment_count"] <= account["max_comment_count"]
+                            if (strategy == "hashtag" or (
+                                item["digg_count"] >= account["min_digg_count"]
+                                and item["comment_count"] <= account["max_comment_count"]
+                            ))
                             and not self.store.work_status(item["aweme_id"], account_id)
                         ]
-                        if strategy == "engagement":
+                        if strategy == "hashtag":
+                            candidates = candidates[:account["candidate_pool_size"]]
+                        elif strategy == "engagement":
                             candidates.sort(
                                 key=lambda item: (item["score"], item["digg_count"]), reverse=True,
                             )
