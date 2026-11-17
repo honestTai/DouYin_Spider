@@ -1,251 +1,197 @@
 <div align="center">
-  <p align="center">
-    <a href="https://github.com/cv-cat/Douyin_Spider" target="_blank" align="center" alt="Go to Douyin_Spider Website">
-      <picture>
-        <img width="220" src="./author/logo.jpg" alt="Douyin_Spider logo">
-      </picture>
-    </a>
-  </p>
-  <div align="center">
-      <a href="https://www.python.org/">
-          <img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python 3.9+">
-      </a>
-      <a href="https://nodejs.org/zh-cn/">
-          <img src="https://img.shields.io/badge/nodejs-18%2B%20(optional)-lightgrey" alt="NodeJS 18+ (optional)">
-      </a>
-  </div>
-  
-  # 🎶DouYin_Spider
-  
-</div>
+  <a href="https://github.com/honestTai/DouYin_Spider/tree/feature/mcp-engagement">
+    <img width="180" src="./author/logo.jpg" alt="DouYin Engagement MCP">
+  </a>
 
+  # DouYin Engagement MCP
 
-## ❤️Sponsor
+  ### 让 Agent 按关键词找到抖音作品，在确认后完成评论与作者私信
 
-<div align="center">
+  **一个可接入 Kimi Code、Codex、Claude Code 及其他 MCP 客户端的定制工具。**
 
-<a href="https://api.openai-next.com">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./author/sponsors/vectrust-dark.png">
-    <img src="./author/sponsors/vectrust.png" alt="Vectrust" height="72">
-  </picture>
-</a>
+  [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
+  [![MCP](https://img.shields.io/badge/MCP-stdio-6c5ce7)](https://modelcontextprotocol.io/)
+  [![Agents](https://img.shields.io/badge/Agents-Kimi%20%C2%B7%20Codex%20%C2%B7%20Claude-success)](#-安装到-agent)
 
-**Sponsored by [Vectrust](https://api.openai-next.com) @ OpenDev Org & NextRouter Alliance**
-
-<sub>[想出现在这里？](mailto:992822653@qq.com)</sub>
+  **[快速开始](#-快速开始) · [能力](#-能力) · [安装到 Agent](#-安装到-agent) · [使用说明](#-使用说明)**
 
 </div>
 
----
+> 本项目基于抖音 Web 私有接口，不是抖音官方开放 API。默认仅预览，真实评论和私信需要显式确认。请勿用于垃圾评论、骚扰私信、违法内容或绕过平台管理。
 
-<div align="center">
+## ❤️ Sponsor
 
-[![FastAIToken](https://raw.githubusercontent.com/TheSmallHanCat/flow2api/main/static/sponsors/fastaitoken-banner.png)](https://www.fastaitoken.com/register?aff=48J4VXUABAAV)
+| Sponsor | What it is |
+| :--- | :--- |
+| [HRouter](https://hrouter.net/home) | **[HRouter](https://hrouter.net/home)**：面向 AI 编码与应用开发的模型接入、API Key 管理和用量跟踪服务，也是本项目维护者正在建设的产品。 |
 
-</div>
+## ✨ 为什么使用它
 
-**FastAIToken** 是面向开发者的 AI API 聚合平台，支持 OpenAI、Claude、Gemini 等主流大模型，兼容 OpenAI API 协议，可无缝接入 **Claude Code、Codex、Gemini CLI、Cherry Studio、Cline、Continue** 等各类 AI 开发工具。平台采用 **充值 1:1（1 元 = 1 美元 API 额度）**，帮助开发者以更低成本、更高效率地使用全球领先的大模型服务。
+**Agent 原生接入。** 通过标准 MCP stdio 服务，让 Agent 直接理解并调用一个边界清晰的业务工具，不需要复制接口代码或手动拼接请求。
 
-平台提供多个可选分组与公开状态页，开发者可根据成本、响应速度和稳定性自由选择不同渠道，并享受 **7×24 小时真人技术支持**（非机器人）。
+**先预览，再执行。** 默认只返回候选作品。只有同时设置 `dry_run=false` 和 `confirm=true`，才会真正发布评论和私信。
 
-**主要做 AI 开发接入？可以试试 [FastAIToken](https://www.fastaitoken.com/register?aff=48J4VXUABAAV)，兼容 Codex / Claude Code / Gemini CLI 等主流工具。**
+**单一职责。** 本定制分支只突出“搜索相关作品 → 评论 → 私信作者”流程，不把直播、创作者发布等其他能力暴露给 Agent。
 
----
+**会话级代理。** 同一 Cookie 固定使用同一个代理，业务请求及签名辅助请求共享出口，避免执行过程中频繁更换 IP。
 
-**✨ 专业的抖音数据采集与交互解决方案，支持数据爬取、直播间监听、私信收发、创作者发布等功能**
+## 🧭 工作流程
 
-大模型时代，自动化是每个开发者都绕不开的课题。
-当你想让 AI Agent 真正落地到抖音——自动处理私信、感知直播间动态、驱动内容互动——第一道墙往往不是模型能力，而是**平台通信能力的缺失**。
-
-本项目做的事很简单：把这道墙拆掉。
-
-**⚠️ 严禁用于发布不良信息、违法内容！本项目仅供学习与技术研究使用，如有侵权请联系作者删除，后果自负。**
-
-## 🌟 功能特性
-
-- ✅ **多维度数据采集**
-  - 用户主页信息 / 作品详情
-  - 评论区数据（含多级回复）
-  - 智能搜索（视频 / 用户 / 直播）
-  - 关注 / 粉丝列表
-  - 消息通知 / 收藏列表 / 推荐流
-- 🎙️ **直播间实时监听**
-  - 弹幕消息 / 礼物（含送礼对象）/ 进场 / 关注 / 点赞 / 房间热度
-  - PK 实时事件 / PK 排行榜 / 直播间贡献榜
-  - 直播间发送弹幕消息
-  - 直播间点赞
-- 💬 **抖音私信收发**
-  - WebSocket 实时接收私信（文本 / 表情包 / 语音 / 图片 / 分享视频）
-  - 主动发送私信
-  - 创建 / 查询会话列表
-- 🤝 **互动操作**
-  - 点赞视频
-  - 发布评论 / 回复评论
-  - 收藏 / 移动 / 取消收藏作品
-- 📤 **创作者中心**
-  - 发布图集 / 视频（支持可见范围、是否允许下载等设置）
-- 🔑 **多种登录方式**
-  - Cookie / 扫码登录 / 手机号验证码登录
-- 🚀 **高性能架构**
-  - 自动重试机制 / 断线重连
-- 🔒 **安全稳定**
-  - 抖音最新 API 适配
-  - 异常处理机制
-  - proxy 代理
-- 🎨 **便捷管理**
-  - 结构化目录存储
-  - 格式化输出（JSON / EXCEL / MEDIA）
-
-## 🎨效果图
-### 处理后的所有用户
-![image](https://github.com/cv-cat/DouYin_Spider/assets/94289429/3f3ff858-c443-4a68-bae6-1d16ef43011d)
-### 某个用户所有的视频\图集
-![image](https://github.com/cv-cat/DouYin_Spider/assets/94289429/fa6f5e65-7e3c-4abf-b140-cd20c33d3b43)
-### 某个视频\图集具体的内容
-![image](https://github.com/cv-cat/DouYin_Spider/assets/94289429/16cfc027-6186-4914-bca4-901f886a9b82)
-### 某个直播时的具体弹幕发言和礼物数据
-![image](https://github.com/cv-cat/DouYin_Spider/assets/94289429/e2cde1f1-6309-44fe-8aa3-bca2821bf30d)
-### 保存的excel
-![image](https://github.com/user-attachments/assets/5dfd8fb4-7597-4f54-af6a-9ab8ba766b7c)
-
-
-
-## 🛠️ 快速开始
-### ⛳运行环境
-- Python 3.9+
-- Node.js 18+（可选，仅部分直播 / 验证码场景会调用，主流程签名已全部纯 Python 实现）
-
-### 🎯安装依赖
-```
-pip install -r requirements.txt
+```mermaid
+flowchart LR
+    A[输入关键词与文案] --> B[搜索相关作品]
+    B --> C[返回候选作品预览]
+    C --> D{确认执行}
+    D -->|否| E[结束，不产生写操作]
+    D -->|是| F[发布作品评论]
+    F --> G[私信作品作者]
+    G --> H[返回分项执行状态]
 ```
 
-### 🎨配置文件
+## 🧩 能力
 
-现在推荐只配置 `DY_COOKIES`：主站 `Auth` 会被作品接口、直播 REST/WebSocket 和创作者中心共同复用。
-`DY_LIVE_COOKIES` 仍可作为旧版独立直播浏览器的显式覆盖，但不再是必填项。
+| 能力 | 实现方式 |
+| :--- | :--- |
+| 相关作品搜索 | 按关键词、排序方式和发布时间查找候选作品 |
+| 发布评论 | 对候选作品逐个发布指定评论文本 |
+| 作者私信 | 创建会话并向作品作者发送指定文本 |
+| 执行保护 | 默认预览、显式确认、单次数量限制、失败即停 |
+| 状态反馈 | 分别返回评论与私信状态，区分失败、部分完成和全部完成 |
+| 代理池 | JSON 数组或逗号分隔配置；同一登录会话稳定分配代理 |
+| 多 Agent 安装 | 一个安装器支持 Kimi Code、Codex、Claude Code 和通用 JSON |
+| 独立启动入口 | 不依赖调用方当前目录，固定从项目根目录加载配置 |
 
-配置文件在项目根目录.env文件中，将下图自己的登录cookie放入其中，cookie获取➡️在浏览器f12打开控制台，点击网络，点击fetch，找一个接口点开
-![image](https://github.com/user-attachments/assets/6a7e4ecb-0432-4581-890a-577e0eae463d)
+## 🚀 快速开始
 
-复制cookie到.env文件中（注意！登录抖音后的cookie才是有效的，不登陆没有用）
-![image](https://github.com/user-attachments/assets/60291f3f-9b69-423f-8b11-167278d44639)
+### 1. 获取分支并创建环境
 
-> ⚠️ 请在 `www.douyin.com` 登录后，从任意 `/aweme/v1/web/` 接口请求中复制**完整** cookie，确认其中包含 `UIFID` 字段。缺少 `UIFID` 时作品详情、搜索等接口会被风控拦截（`Uifid Not Found`）。
-
-> `UIFID` 是推荐流接口响应下发的设备标识，复制完整 Cookie 后会自动带上，用户不需要手工生成或填写。
-
-### 写接口的 dtrait 配置
-
-发布、评论、点赞、收藏等写接口会发送按请求路径重算的 `x-tt-session-dtrait`。项目默认加载随包的 [utils/dtrait_profile.json](utils/dtrait_profile.json)，通常不需要额外配置；显式设置 `DY_DTRAIT_BLOB` 时会优先使用它。
-
-`utils/dtrait_features.py` 是 dtrait 内层 VM 的纯 Python 实现，负责 Murmur3、特征标签、布尔位图和 base64 打包；档案里的渲染哈希是设备一次采样后复用的常量，外层 RSA/AES 则每次按请求路径和时间重新计算。
-
-换设备时可以在 `.env` 中设置 `DY_DTRAIT_PROFILE` 指向自己的设备档案 JSON。抓取时在已登录的 `www.douyin.com` 打开开发者工具，在 Console 先执行下面的 hook，再回到页面触发一次点赞、收藏或评论请求：
-
-```js
-(() => {
-  const aes = window.DTraitUcAesEncrypt;
-  if (!aes?.encryptData) throw new Error('dtrait SDK 尚未初始化，请先刷新并等待页面加载完成');
-  const original = aes.encryptData;
-  aes.encryptData = function (...args) {
-    for (const value of args) {
-      const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
-      try {
-        const payload = JSON.parse(text);
-        if (payload?.dtrait) console.log('DY_DTRAIT_BLOB=', payload.dtrait);
-      } catch (_) {}
-    }
-    return original.apply(this, args);
-  };
-  console.log('dtrait hook installed; now trigger one write request');
-})();
+```bash
+git clone -b feature/mcp-engagement https://github.com/honestTai/DouYin_Spider.git
+cd DouYin_Spider
+python3.10 -m venv .venv
 ```
 
-把 Console 打印的 `DY_DTRAIT_BLOB` 值复制到 `.env`。不要复制完整 Cookie 或 `x-tt-session-dtrait` 外层密文；外层头会由项目按当前路径和时间重新生成。
+macOS / Linux 后续命令使用 `.venv/bin/python`；Windows 请替换为 `.venv\Scripts\python.exe`。
 
+### 2. 安装依赖
 
-
-### 🚀运行项目
-```
-# 数据爬取
-python main.py
-
-# 直播间监听（弹幕 / 礼物 / 点赞等）
-python -m dy_live.server <LIVE_ID>
-
-# 抖音私信实时接收
-python dy_apis/douyin_recv_msg.py
-
-# 创作者中心快速发布图集 / 视频（先修改文件顶部的“用户配置”）
-python quick_publish.py
+```bash
+.venv/bin/python -m pip install --use-deprecated=legacy-resolver -r requirements.txt
+.venv/bin/python -m pip install 'protobuf>=5.27'
 ```
 
-### MCP：搜索作品、评论并私信作者
+上游依赖 `blackboxprotobuf` 声明固定使用 `protobuf==3.10`，而项目生成的 Protobuf 代码需要 5.27 以上版本。上述顺序保留项目当前的兼容安装方式，并在最后恢复所需的 Protobuf 版本。
 
-`dy_mcp/server.py` 只向 Agent 暴露一个 `run_engagement` 工具，流程为“关键词搜索相关作品 → 发布评论 → 私信作品作者”。需要 Python 3.10+，安装 `requirements.txt` 中的依赖后，在 `.env` 配置 `DY_COOKIES` 及写接口所需的同会话凭据。
+### 3. 配置登录与代理
 
-可选代理池使用 JSON 数组或逗号分隔地址。同一 Cookie 固定分配到同一个代理，搜索、评论、私信及签名辅助请求不会在执行过程中切换出口 IP：
+```bash
+cp .env.example .env
+```
+
+至少在 `.env` 中配置：
+
+```dotenv
+DY_COOKIES='你的完整登录 Cookie'
+DY_TICKET=''
+DY_TS_SIGN=''
+DY_CLIENT_CERT=''
+DY_PRIVATE_KEY=''
+DY_DTRAIT_BLOB=''
+DY_DTRAIT_PROFILE=''
+DY_PROXY_POOL=''
+```
+
+Cookie 必须来自已登录的 `www.douyin.com`，并包含 `UIFID`。评论和私信属于写接口，通常还需要与当前 Cookie 同一次登录会话的 `ticket/ts_sign` 和 dtrait 设备素材，不能混用不同会话的旧凭据。
+
+代理池为可选项：
 
 ```dotenv
 DY_PROXY_POOL='["http://user:pass@proxy-one:8080", "http://user:pass@proxy-two:8080"]'
 ```
 
-#### 安装到 Agent
+`.env` 已加入 Git 忽略。不要把 Cookie、私钥或代理密码提交到仓库，也不要直接粘贴到 Agent 对话中。
 
-在项目根目录使用项目的虚拟环境 Python 执行安装器。安装器只写启动配置，不会复制 Cookie 或代理密码。
+## 🔌 安装到 Agent
+
+在项目根目录使用虚拟环境 Python 执行安装器。安装器只写启动配置，不复制登录凭据。
+
+| Agent | 安装命令 | 配置范围 |
+| :--- | :--- | :--- |
+| Kimi Code | `.venv/bin/python -m dy_mcp.install --agent kimi` | 当前项目 `.kimi-code/mcp.json` |
+| Codex | `.venv/bin/python -m dy_mcp.install --agent codex` | Codex 用户级 MCP 配置 |
+| Claude Code | `.venv/bin/python -m dy_mcp.install --agent claude` | 当前项目的 local 配置 |
+
+一次安装全部：
 
 ```bash
-# Kimi Code：写入当前项目 .kimi-code/mcp.json
-.venv/bin/python -m dy_mcp.install --agent kimi
-
-# Codex：通过 codex CLI 写入用户级配置
-.venv/bin/python -m dy_mcp.install --agent codex
-
-# Claude Code：通过 claude CLI 写入当前项目的 local 配置
-.venv/bin/python -m dy_mcp.install --agent claude
-
-# 依次安装以上三种；某个 CLI 不存在不会中断其他安装
 .venv/bin/python -m dy_mcp.install --agent all
+```
 
-# 输出给其他 MCP 客户端使用的通用 JSON 配置
+某个 Agent CLI 不存在时，`all` 会继续安装其他 Agent，最后以非零状态报告未完成的安装。
+
+其他 MCP 客户端可以输出通用 JSON：
+
+```bash
 .venv/bin/python -m dy_mcp.install --agent json
 ```
 
-也可以直接用 `.venv/bin/python mcp_server.py` 启动 stdio 服务。该入口不要求调用方位于项目目录，会固定从项目根目录加载 `.env`。
+安装后重新启动 Agent 或新开会话：
 
-安装后重新启动对应 Agent 或新开会话：
+- **Kimi Code**：输入 `/mcp` 查看连接状态。
+- **Codex**：执行 `codex mcp list`，或在 TUI 中输入 `/mcp`。
+- **Claude Code**：执行 `claude mcp list`；如果提示项目信任或服务器审批，先核对启动命令再确认。
 
-- Kimi Code：输入 `/mcp` 查看连接状态。
-- Codex：执行 `codex mcp list`，或在 TUI 输入 `/mcp`。
-- Claude Code：执行 `claude mcp list` 检查连接；项目配置如提示审批，需要先确认信任。
+也可以直接验证 stdio 服务：
 
-#### 工具参数
+```bash
+.venv/bin/python mcp_server.py
+```
 
-- `query`：搜索关键词，必填。
-- `comment_text`：发布到每个作品评论区的文本，必填。
-- `message_text`：发送给每个作品作者的私信文本，必填。
-- `limit`：最多处理作品数，默认 3，范围 1–20。
-- `dry_run`：默认 `true`，只搜索和预览，不执行写操作。
-- `confirm`：默认 `false`；真实执行必须同时设置 `dry_run=false`、`confirm=true`。
-- `sort_type`：`0` 综合、`1` 最多点赞、`2` 最新发布。
-- `publish_time`：`0` 不限、`1` 一天内、`7` 一周内、`180` 半年内。
-- `interval_seconds`：每个作品之间的等待秒数，默认 3，范围 0–60。
+该命令通过标准输入输出通信，正常启动后等待 MCP 客户端连接，不会主动执行评论或私信。
 
-预览调用示例：
+## 🛠️ 使用说明
+
+MCP 服务只暴露一个工具：`run_engagement`。
+
+### 参数
+
+| 参数 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `query` | 必填 | 搜索关键词 |
+| `comment_text` | 必填 | 发布到每个候选作品的评论文本 |
+| `message_text` | 必填 | 发送给每个作品作者的私信文本 |
+| `limit` | `3` | 最多处理作品数，范围 1–20 |
+| `dry_run` | `true` | 是否只搜索和预览 |
+| `confirm` | `false` | 真实执行确认 |
+| `sort_type` | `0` | `0` 综合、`1` 最多点赞、`2` 最新发布 |
+| `publish_time` | `0` | `0` 不限、`1` 一天内、`7` 一周内、`180` 半年内 |
+| `interval_seconds` | `3.0` | 每个作品之间的等待秒数，范围 0–60 |
+
+### 第一步：只预览
+
+直接对 Agent 说：
+
+```text
+使用 douyin-engagement 搜索“榴莲”相关作品，limit=1，dry_run=true。
+评论文案为“这个内容很有帮助”，私信文案为“你好，想请教一下相关问题”。
+只返回预览，不实际评论或私信。
+```
+
+等价的工具参数：
 
 ```json
 {
   "query": "榴莲",
-  "comment_text": "评论文案",
-  "message_text": "私信文案",
-  "limit": 3,
+  "comment_text": "这个内容很有帮助",
+  "message_text": "你好，想请教一下相关问题",
+  "limit": 1,
   "dry_run": true
 }
 ```
 
-也可以直接对 Agent 说：“使用 douyin-engagement 搜索榴莲相关作品，只预览 3 个结果，不实际评论或私信。”确认候选作品和文案后，使用相同参数并改为以下两项才会真实执行：
+### 第二步：确认执行
+
+核对候选作品和文案后，在同一会话中要求 Agent 使用相同参数，并明确修改：
 
 ```json
 {
@@ -254,95 +200,81 @@ DY_PROXY_POOL='["http://user:pass@proxy-one:8080", "http://user:pass@proxy-two:8
 }
 ```
 
-结果中的 `comment_status` 和 `message_status` 分别记录评论、私信状态。任一作品失败后立即停止；`failed` 表示没有写入成功，`partial` 表示部分操作已经写入，`completed` 表示请求的作品均已完成。线上执行前应先用 `limit=1` 验证账号凭据与目标。
+建议第一次真实执行保持 `limit=1`，确认账号凭据、代理和目标均符合预期后再考虑扩大范围。
 
-### 🗝️注意事项
-- `main.py` 是爬虫入口，可根据需求自行修改调用
-- `dy_apis/douyin_api.py` 包含全部 API 接口封装，含直播间点赞、发消息、私信收发等
-- `dy_live/server.py` 包含直播间 WebSocket 监听逻辑
-- `dy_apis/douyin_recv_msg.py` 包含抖音私信 WebSocket 实时接收逻辑
-- `dy_apis/douyin_creator_api.py` 包含创作者中心上传 / 发布作品接口
-- `dy_apis/login_api.py` 包含扫码、手机号验证码登录逻辑
-- `dy_live/pk.py` 包含直播间 PK 事件解析
+### 执行结果
 
+- `comment_status`：`pending`、`published` 或 `failed`。
+- `message_status`：`pending`、`sent` 或 `failed`。
+- `completed`：本次请求的作品均已完成评论和私信。
+- `partial`：已有部分写操作成功，但流程中途失败。
+- `failed`：没有写操作成功。
+- `stopped_on_error`：是否因任一作品失败而停止后续处理。
 
-## 🍥日志
-   
-| 日期       | 说明                                   |
-| -------- | ------------------------------------ |
-| 23/10/05 | - 项目完成。 |
-| 23/10/17 | - 首次提交。 |
-| 23/10/18 | - 监听直播间弹幕和礼物。 |
-| 23/10/21 | - 新增搜索智能排序和限制时间。 |
-| 23/10/21 | - 新增可视化界面到release v1.1.0。 |
-| 23/10/25 | - 新增issue提出的输出直播间消息时包括用户等级。 |
-| 23/10/28 | - 遇到验证码请手动点击！Fix Some Bugs。 |
-| 23/11/11 | - 修复了很多很多大家的bug~~，关于v.dy格式的url正在处理 |
-| 23/12/22 | - 修复了直播间监控 |
-| 25/06/07 | - 开放所有之前闭源的代码，包括数据爬取和直播间监听 |
-| 26/04/09 | - 修复直播间礼物信息接收（含送礼对象）；新增直播间点赞、直播间发弹幕；新增抖音私信实时接收（WebSocket）与主动发送功能 |
-| 26/07/26 | - 签名算法全部改为纯 Python 实现，主流程不再依赖 Node.js；私信支持浏览器登录 |
-| 26/08/30 | - 新增创作者中心发布图集 / 视频；新增扫码、手机号验证码登录 |
-| 26/09/13 | - 新增直播间贡献榜接口 |
-| 26/09/19 | - 新增直播间 PK 排行榜接口与 PK 实时事件监听 |
-| 26/09/20 | - 对齐直播间弹幕发送与作品评论发布接口 |
-| 26/09/27 | - 修复视频下载（CDN 需带 Referer，之前会把 403 页面存成 mp4）；单个作品下载失败时跳过，不再中断整批 |
+## 🗂️ 定制部分结构
 
-## 🤝 欢迎贡献 PR
+```text
+mcp_server.py                 # 与调用目录无关的 stdio 启动入口
+dy_mcp/
+├── server.py                 # MCP 工具定义
+├── workflow.py               # 搜索、评论、私信流程
+├── session.py                # 登录会话与项目级 .env 加载
+├── proxy_pool.py             # 会话固定代理分配
+└── install.py                # 多 Agent 安装器
+tests/
+├── test_engagement_workflow.py
+├── test_mcp_proxy_pool.py
+└── test_mcp_installer.py
+```
 
-本项目欢迎任何形式的贡献！如果你有新功能想法、Bug 修复或文档改进，欢迎提交 PR。
+原项目的数据采集、直播、创作者发布等代码仍保留在仓库中，但不会通过本 MCP 服务暴露。上游 `main.py` 当前包含主动私信示例，不要把它当作本 MCP 的启动入口。
 
-- Fork 本仓库并在新分支上开发
-- 保持代码风格与现有代码一致
-- PR 描述中请简要说明改动内容和目的
-- 也欢迎通过 [Issue](https://github.com/cv-cat/DouYin_Spider/issues) 提出建议或报告问题
+## 🧪 开发验证
 
-## 🧸额外说明
-1. 感谢star⭐和follow📰！不时更新
-2. 作者的联系方式在主页里，有问题可以随时联系我
-3. 可以关注下作者的其他项目，欢迎 PR 和 issue
-4. 感谢赞助！如果此项目对您有帮助，请作者喝一杯奶茶~~ （开心一整天😊😊）
-5. thank you~~~
+```bash
+.venv/bin/python -m pip install pytest
+.venv/bin/python -m pytest -q \
+  tests/test_engagement_workflow.py \
+  tests/test_mcp_proxy_pool.py \
+  tests/test_mcp_installer.py
+```
+
+真实接口验证应先使用预览模式，再在测试账号和明确目标上以 `limit=1` 执行。离线测试不会验证抖音当前的风控策略、账号状态或线上接口可用性。
+
+## 📄 来源与使用边界
+
+本仓库是 **[cv-cat/Douyin_Spider](https://github.com/cv-cat/Douyin_Spider)** 的 fork，感谢原作者及贡献者开放数据采集、认证、签名、评论和私信等基础实现。
+
+`feature/mcp-engagement` 是由 **[honestTai](https://github.com/honestTai)** 定制的 MCP 分支，新增跨 Agent 安装、预览确认、流程状态反馈和会话级代理管理。原项目相关权利与使用要求仍归原项目及相应权利人所有。
+
+本项目仅供学习与技术研究。使用者需要自行确认账号授权、内容合规、平台规则及适用法律，不得用于发布不良信息、垃圾互动或骚扰他人。
+
+## 🧰 More from honestTai
+
+| Project | What it does |
+| :--- | :--- |
+| [**geo-console**](https://github.com/honestTai/geo-console) | 面向品牌团队的证据驱动 GEO 工作台 |
+| [**HRouter Desktop**](https://github.com/honestTai/HRouter-Desktop) | 本地优先的 AI 编码 Agent、模型与路由管理工作台 |
+| [**hrouter-market-pulse**](https://github.com/honestTai/hrouter-market-pulse) | A 股、港股和美股研究工作台与 Codex 插件 |
+| [**seehtml-ai**](https://github.com/honestTai/seehtml-ai) | 从想法到 HTML、演示文稿或视频的本地创作工具 |
+
+[查看全部公开项目 →](https://github.com/honestTai)
+
+---
 
 <div align="center">
-  <img src="./author/wx_pay.png" width="400px" alt="微信赞赏码"> 
-  <img src="./author/zfb_pay.jpg" width="400px" alt="支付宝收款码">
+
+Made by **[honestTai](https://github.com/honestTai)** · Based on **[cv-cat/Douyin_Spider](https://github.com/cv-cat/Douyin_Spider)**
+
+如果这个项目对你有帮助，欢迎 Star、Fork，或在 Issues 中分享建议。
+
 </div>
 
+## 📈 Project activity
 
-## 📈 Star 趋势
-
-<a href="https://cvcat.site/star-history/svg?repos=cv-cat/DouYin_Spider&type=Date">
+<a href="https://www.star-history.com/#honestTai/DouYin_Spider&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cvcat.site/star-history/svg?repos=cv-cat/DouYin_Spider&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://cvcat.site/star-history/svg?repos=cv-cat/DouYin_Spider&type=Date" />
-    <img alt="Star History Chart" src="https://cvcat.site/star-history/svg?repos=cv-cat/DouYin_Spider&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=honestTai/DouYin_Spider&type=Date&theme=dark">
+    <img src="https://api.star-history.com/svg?repos=honestTai/DouYin_Spider&type=Date" alt="Star history of DouYin_Spider fork">
   </picture>
 </a>
-
-
-
-## 🍔 交流群
-
-如果你对爬虫和 AI Agent 感兴趣，可以加入群聊一起讨论~
-
-ps: 请加群，人满或者过期 issue | wx 提醒 | qq提醒
-
-| group-1 | group-2 | group-3 | group-4 (2000人qq群) |
-|:--:|:--:|:--:|:--:|
-| <img width="280" alt="group1" src="https://cvcat.site/assets/group1.jpg" /> | <img width="280" alt="group2" src="https://cvcat.site/assets/group2.jpg" /> | <img width="280" alt="group3" src="https://cvcat.site/assets/group3.jpg" /> | <img width="280" alt="group3" src="https://cvcat.site/assets/group4.jpg" /> |
-
-
-## 发布链二次验证（2026-10-17 逆向）
-
-`create_v2` 可能返回 `x-tt-verify-passport-decision` 要求二次验证（HTTP 200 空 body）：
-
-- **gateway_biz_verify**：`DYLoginApi` 可发起扫码二次验证闭环——
-  `get_qrcode` 参数 `aid=6383`（勿用 2906，回 4031）+ `scene=secondary_verify` +
-  `verify_scene=creator`，用户抖音 App 扫码后 `check_qrconnect` status=confirmed。
-- **gateway_web_authlv_check**：认证等级不足，扫码不够（需短信/人脸/密码）。
-  纯 HTTP 会话发码被 error_code=16 拒——建议用 cookie 导入（同设备已信任会话）。
-
-安全相关对齐基线（2026-10-17）：UA/sec-ch-ua Chrome 155、PASSPORT_SDK 3.4.9 族、
-dtrait 与真实设备逐字节一致、Cookie 头按浏览器 wire 顺序（`DouyinAuth.BROWSER_COOKIE_ORDER`）、
-creator 域 msToken 走 ms_appid=2906 独立通道。
