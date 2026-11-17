@@ -12,6 +12,7 @@ TOOL_NAMES = [
     "run_engagement",
     "list_adspower_profiles",
     "upsert_account",
+    "refresh_account_runtime",
     "list_accounts",
     "run_account_once",
     "configure_scheduler",

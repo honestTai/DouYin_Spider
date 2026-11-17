@@ -36,6 +36,10 @@ def make_account(store, name="账号一", profile_id="profile-one", **overrides)
 
 def make_engine(store, api):
     auth = Mock()
+    for account in store.list_accounts():
+        store.save_runtime(
+            account["id"], {"DY_COOKIES": "sessionid=test"}, {"profile_id": "profile-one"},
+        )
     return MultiAccountEngine(
         store, runtime_loader=runtime_loader, api=api,
         auth_factory=lambda *_args, **_kwargs: auth,
@@ -290,3 +294,53 @@ def test_batch_respects_remaining_global_hour_and_daily_quotas(tmp_path, quota_k
     assert result["work"]["aweme_id"] == "quota-one"
     assert api.publish_comment.call_count == 1
     assert store.count_published(account["id"], hours=24) == existing_count + 1
+
+
+def test_saved_runtime_is_reused_without_calling_browser_or_exposing_secrets(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store)
+    saved_at = store.save_runtime(
+        account["id"],
+        {"DY_COOKIES": "sessionid=secret", "DY_TICKET": "private-ticket"},
+        {"browser_type": "webbridge"},
+    )
+    loader = Mock(side_effect=AssertionError("不应访问浏览器"))
+    api = Mock()
+    api.search_some_general_work.return_value = [work("saved-runtime", 9000, 1)]
+    auth = Mock()
+    engine = MultiAccountEngine(
+        store, runtime_loader=loader, api=api,
+        auth_factory=lambda *_args, **_kwargs: auth,
+    )
+
+    result = engine.run(account["id"])
+    public_account = store.list_accounts()[0]
+
+    assert result["status"] == "preview"
+    assert result["profile"]["credential_source"] == "saved"
+    assert result["profile"]["runtime_saved_at"] == saved_at
+    assert public_account["runtime_status"] == "saved"
+    assert public_account["runtime_saved_at"] == saved_at
+    assert "secret" not in str(public_account)
+    assert "private-ticket" not in str(result)
+    loader.assert_not_called()
+
+
+def test_missing_saved_runtime_reports_rebind_and_skips_scheduler(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store)
+    loader = Mock()
+    engine = MultiAccountEngine(
+        store, runtime_loader=loader, api=Mock(),
+        auth_factory=lambda *_args, **_kwargs: Mock(),
+    )
+
+    result = engine.run(account["id"])
+    selected, _reason = store.next_account(min_interval_seconds=0)
+
+    assert result["status"] == "failed"
+    assert result["account_status"] == "authentication_required"
+    assert "refresh_account_runtime" in result["error"]
+    assert store.get_account(account["id"])["status"] == "authentication_required"
+    assert selected is None
+    loader.assert_not_called()

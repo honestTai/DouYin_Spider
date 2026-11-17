@@ -123,7 +123,8 @@ DY_DTRAIT_BLOB=''
 | `run_engagement` | 单账号搜索、文字/图片评论，可选作者私信 |
 | `list_adspower_profiles` | 列出 AdsPower 环境，不返回 Cookie 或代理密码 |
 | `upsert_account` | 新增或更新独立账号、环境、关键词、文案、图片和限额 |
-| `list_accounts` | 查看账号配置、状态、小时/每日评论数和最近结果 |
+| `refresh_account_runtime` | 首次从已登录浏览器保存 Cookie、签名参数和指纹；失效后重新绑定 |
+| `list_accounts` | 查看账号配置、凭证保存状态、小时/每日评论数和最近结果 |
 | `run_account_once` | 独立进程搜索预览或真实评论；支持 `aweme_id` 定向执行 |
 | `configure_scheduler` | 查询、启动、停止定时调度并调整频率 |
 | `list_activity` | 查询 SQLite 中的真实运行记录 |
@@ -156,6 +157,16 @@ DY_DTRAIT_BLOB=''
 - `comment_text` 可在仅图片评论时留空。
 
 ## 多账号配置
+
+账号配置完成后，调用一次 `refresh_account_runtime`：
+
+```json
+{"account_id": "账号ID"}
+```
+
+该工具从绑定的已登录浏览器获取 Cookie、签名参数和指纹，并保存到本地 SQLite 的 `account_runtime` 表。`list_accounts` 只显示 `runtime_status` 和 `runtime_saved_at`，不会返回凭证内容；数据库已排除在 Git 之外，不要分享该文件。
+
+保存成功后，搜索、上传图片、评论和定时调度均直接使用本地凭证，不再访问浏览器，浏览器可以关闭。登录失效或凭证不可用时，运行记录会返回错误，账号进入 `authentication_required` 状态并暂停调度；重新打开对应浏览器登录后，再次调用 `refresh_account_runtime` 即可恢复。遇到二次验证则进入 `verification_required`，应先完成验证再刷新凭证。
 
 ### AdsPower
 
@@ -320,7 +331,7 @@ GET /aweme/v1/web/comment/upload/auth/
 
 ## 定时调度
 
-调度器是独立后台进程，不依赖 stdio MCP 持续在线。默认配置：
+调度器是独立后台进程，不依赖 stdio MCP 持续在线；账号凭证保存成功后也不依赖浏览器在线。默认配置：
 
 ```text
 enabled = false

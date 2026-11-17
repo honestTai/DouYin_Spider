@@ -82,9 +82,10 @@ def test_multi_account_accepts_image_only_configuration(tmp_path):
             "statistics": {"digg_count": 5000, "comment_count": 2},
         }
     }]
+    store.save_runtime(account["id"], {"DY_COOKIES": "sessionid=test"}, {})
     engine = MultiAccountEngine(
         store,
-        runtime_loader=lambda _account: ({"DY_COOKIES": "sessionid=test"}, {}),
+        runtime_loader=lambda _account: (_ for _ in ()).throw(AssertionError("不应访问浏览器")),
         api=api, auth_factory=lambda *_args, **_kwargs: Mock(),
     )
 

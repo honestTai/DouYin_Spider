@@ -70,6 +70,27 @@ def upsert_account(
 
 
 @mcp.tool()
+def refresh_account_runtime(account_id: str) -> dict:
+    """从已登录浏览器刷新并保存账号凭证；日常调度不会访问浏览器，也不返回凭证内容。"""
+    from .browser_runtime import collect_runtime_for_account
+
+    account = store.get_account(account_id)
+    if not account:
+        raise ValueError("账号不存在")
+    runtime_env, runtime_info = collect_runtime_for_account(account)
+    saved_at = store.save_runtime(account_id, runtime_env, runtime_info)
+    store.set_account_status(account_id, "active")
+    return {
+        "status": "saved",
+        "account_id": account_id,
+        "account_name": account["name"],
+        "runtime_saved_at": saved_at,
+        "profile": runtime_info,
+        "message": "登录凭证已保存；后续调度直接复用，Cookie 失效时重新调用本工具",
+    }
+
+
+@mcp.tool()
 def list_accounts() -> dict:
     """显示所有账号的环境绑定、状态、小时/每日评论数和最近执行结果。"""
     accounts = store.list_accounts()

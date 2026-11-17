@@ -88,6 +88,12 @@ class AccountStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_engagements_account_time
                     ON engagements(account_id, created_at);
+                CREATE TABLE IF NOT EXISTS account_runtime (
+                    account_id TEXT PRIMARY KEY REFERENCES accounts(id),
+                    runtime_env TEXT NOT NULL,
+                    runtime_info TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -247,11 +253,42 @@ class AccountStore:
             row = db.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
         return self._account(row)
 
+    def save_runtime(self, account_id, runtime_env, runtime_info):
+        now = utc_now()
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO account_runtime(account_id, runtime_env, runtime_info, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(account_id) DO UPDATE SET "
+                "runtime_env=excluded.runtime_env, runtime_info=excluded.runtime_info, "
+                "updated_at=excluded.updated_at",
+                (account_id, json.dumps(runtime_env), json.dumps(runtime_info, ensure_ascii=False), now),
+            )
+        return now
+
+    def get_runtime(self, account_id):
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT runtime_env, runtime_info, updated_at FROM account_runtime WHERE account_id=?",
+                (account_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "env": parse_json(row["runtime_env"]),
+            "info": parse_json(row["runtime_info"]),
+            "saved_at": row["updated_at"],
+        }
+
     def list_accounts(self):
         with self.connect() as db:
             rows = db.execute("SELECT * FROM accounts ORDER BY name").fetchall()
             accounts = [self._account(row) for row in rows]
             for account in accounts:
+                runtime = db.execute(
+                    "SELECT updated_at FROM account_runtime WHERE account_id=?", (account["id"],),
+                ).fetchone()
+                account["runtime_status"] = "saved" if runtime else "missing"
+                account["runtime_saved_at"] = runtime["updated_at"] if runtime else None
                 account["comments_last_hour"] = self._count_published(
                     db, account["id"], self._cutoff(timedelta(hours=1)),
                 )

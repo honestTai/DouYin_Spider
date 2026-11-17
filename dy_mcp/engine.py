@@ -47,6 +47,12 @@ class MultiAccountEngine:
             "二次身份验证", "scene=comment", "ticket/ts_sign", "同会话", "dtrait",
         ))
 
+    @staticmethod
+    def _is_authentication_error(message):
+        return any(text in message.lower() for text in (
+            "尚未保存登录凭证", "cookie 失效", "cookie失效", "登录已失效", "需要重新登录",
+        ))
+
     def _remaining_quota(self, account):
         settings = self.store.settings()
         global_hour = int(settings.get("global_per_hour", "20"))
@@ -73,7 +79,21 @@ class MultiAccountEngine:
         run_id = self.store.create_run(account_id, keyword, comment_text, dry_run)
         auth = None
         try:
-            runtime_env, runtime_info = self.runtime_loader(account)
+            saved_runtime = self.store.get_runtime(account_id)
+            if not saved_runtime:
+                raise RuntimeError("尚未保存登录凭证，请先调用 refresh_account_runtime 绑定浏览器")
+            runtime_env = dict(saved_runtime["env"])
+            runtime_info = {
+                **saved_runtime["info"],
+                "credential_source": "saved",
+                "runtime_saved_at": saved_runtime["saved_at"],
+            }
+            if account.get("proxy_url"):
+                runtime_env["DY_PROXY_URL"] = account["proxy_url"]
+                runtime_info["proxy"] = "已配置独立代理"
+            else:
+                runtime_env.pop("DY_PROXY_URL", None)
+                runtime_info["proxy"] = "环境默认网络"
             os.environ.update(runtime_env)
             if self.api is None or self.auth_factory is None:
                 from dy_apis.douyin_api import DouyinAPI
@@ -229,6 +249,8 @@ class MultiAccountEngine:
             account_status = "active"
             if stopped_error and self._is_verification_error(stopped_error):
                 account_status = "verification_required"
+            elif stopped_error and self._is_authentication_error(stopped_error):
+                account_status = "authentication_required"
             self.store.set_account_status(account_id, account_status, stopped_error or None)
             return {
                 **base,
@@ -247,7 +269,12 @@ class MultiAccountEngine:
         except Exception as error:
             message = str(error)
             self.store.finish_run(run_id, "failed", error=message)
-            status = "verification_required" if self._is_verification_error(message) else "active"
+            if self._is_verification_error(message):
+                status = "verification_required"
+            elif self._is_authentication_error(message):
+                status = "authentication_required"
+            else:
+                status = "active"
             self.store.set_account_status(account_id, status, message)
             return {
                 "account_id": account_id,
