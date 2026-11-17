@@ -62,7 +62,7 @@ class MultiAccountEngine:
             account["per_day_limit"] - self.store.count_published(account["id"], hours=24),
         ))
 
-    def run(self, account_id, *, dry_run=True, confirm=False, aweme_id=""):
+    def run(self, account_id, *, dry_run=True, confirm=False, aweme_id="", keyword=""):
         account = self.store.get_account(account_id)
         if not account:
             raise ValueError("账号不存在")
@@ -71,7 +71,8 @@ class MultiAccountEngine:
         if not dry_run and not confirm:
             raise ValueError("真实评论必须同时设置 dry_run=false 和 confirm=true")
         previous_runs = len(self.store.recent_runs(limit=1000, account_id=account_id))
-        keyword = account["keywords"][previous_runs % len(account["keywords"])]
+        requested_keyword = str(keyword or "").strip()
+        keyword = requested_keyword or account["keywords"][previous_runs % len(account["keywords"])]
         comment_text = (account["comment_texts"][previous_runs % len(account["comment_texts"])]
                         if account["comment_texts"] else "")
         image_path = (account["image_paths"][previous_runs % len(account["image_paths"])]
@@ -132,7 +133,8 @@ class MultiAccountEngine:
                 else:
                     strategy_options = [("engagement", "1", "0")]
                 start = previous_runs % len(account["keywords"])
-                keywords = account["keywords"][start:] + account["keywords"][:start]
+                keywords = ([requested_keyword] if requested_keyword else
+                            account["keywords"][start:] + account["keywords"][:start])
                 candidates = []
                 for search_keyword in keywords:
                     for strategy, sort_type, publish_time in strategy_options:

@@ -371,3 +371,18 @@ def test_hashtag_strategy_keeps_top_five_ranking_without_engagement_filters(tmp_
     assert result["searched_keywords"] == [{"keyword": "ai", "strategy": "hashtag"}]
     api.search_some_general_work.assert_called_once()
     assert api.search_some_general_work.call_args.args[1:] == ("#ai", 5, "0", "0")
+
+
+def test_keyword_override_only_affects_current_search(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store, keywords=["默认关键词"])
+    api = Mock()
+    api.search_some_general_work.return_value = [work("custom", 9000, 1)]
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"], keyword="临时关键词")
+
+    assert result["status"] == "preview"
+    assert result["keyword"] == "临时关键词"
+    assert api.search_some_general_work.call_args.args[1] == "临时关键词"
+    assert store.get_account(account["id"])["keywords"] == ["默认关键词"]

@@ -90,7 +90,82 @@ DY_DTRAIT_BLOB=''
 
 这些值必须来自同一次浏览器登录会话。多账号模式不必共享 `.env`，会在各自工作进程中从对应浏览器环境读取。
 
-### 4. 验证 MCP
+### 4. 独立 CLI（无需 Agent / MCP）
+
+CLI 与 MCP 共用账号、凭证和 SQLite 调度配置，但不需要启动任何 Agent。所有命令均输出 JSON，可通过 `命令 --help` 查看完整参数。
+
+创建账号并配置关键词、仅图片评论和限额：
+
+```bash
+.venv/bin/python douyin_cli.py account create \
+  --name "账号 A" --browser-type webbridge \
+  --keywords "AI,Claude Code,vibecoding" \
+  --comment-texts "" --image-paths "/absolute/path/poster.png" \
+  --per-hour-limit 10 --per-day-limit 50 --batch-size 5
+```
+
+更新账号时，未提供的参数保持原值：
+
+```bash
+# 修改后续调度关键词
+.venv/bin/python douyin_cli.py account set 账号ID --keywords "AI,Claude Code"
+
+# 修改图片、文案、限额、内容策略或启用状态
+.venv/bin/python douyin_cli.py account set 账号ID --image-paths "/absolute/path/new.png"
+.venv/bin/python douyin_cli.py account set 账号ID --comment-texts "文案一" --comment-texts "文案二"
+.venv/bin/python douyin_cli.py account set 账号ID --per-day-limit 50 --content-strategy hashtag
+.venv/bin/python douyin_cli.py account set 账号ID --disable
+
+# 查看账号和 AdsPower 环境，刷新登录凭证
+.venv/bin/python douyin_cli.py account show 账号ID
+.venv/bin/python douyin_cli.py accounts
+.venv/bin/python douyin_cli.py profiles
+.venv/bin/python douyin_cli.py refresh 账号ID
+```
+
+使用已保存的多账号凭证执行一次；默认只预览，真实发布必须加 `--live --confirm`：
+
+```bash
+# 临时指定本次关键词，不修改账号配置
+.venv/bin/python douyin_cli.py once 账号ID --keyword "Claude Code"
+
+# 使用账号轮换关键词真实执行
+.venv/bin/python douyin_cli.py once 账号ID --live --confirm
+
+# 指定作品执行，不走搜索
+.venv/bin/python douyin_cli.py once 账号ID --aweme-id 作品ID --live --confirm
+```
+
+使用 `.env` 单账号搜索、评论和可选私信：
+
+```bash
+.venv/bin/python douyin_cli.py engage "Claude Code" \
+  --comment-text "评论文字" --image-path "/absolute/path/poster.png" \
+  --message-text "可选私信" --limit 3 --sort-type 1 --publish-time 7
+```
+
+配置并启动调度：
+
+```bash
+# 只修改调度配置，不启动新进程
+.venv/bin/python douyin_cli.py config --global-per-hour 10 \
+  --min-interval-seconds 360 --poll-seconds 15
+
+# 后台启动真实评论调度
+.venv/bin/python douyin_cli.py start --live --confirm
+
+# 前台预览调度，Ctrl+C 停止
+.venv/bin/python douyin_cli.py run --dry-run
+
+# 查看状态与历史，停止调度
+.venv/bin/python douyin_cli.py status
+.venv/bin/python douyin_cli.py activity --account-id 账号ID --limit 20
+.venv/bin/python douyin_cli.py stop
+```
+
+后台进程独立于终端和 Agent，日志写入 `.kimi-code/scheduler.log`。电脑休眠、关机或重启仍会中断运行。
+
+### 5. 验证 MCP
 
 ```bash
 .venv/bin/python mcp_server.py

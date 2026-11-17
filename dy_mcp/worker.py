@@ -11,11 +11,12 @@ def main(argv=None):
     parser.add_argument("account_id")
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--aweme-id", default="")
+    parser.add_argument("--keyword", default="")
     args = parser.parse_args(argv)
     load_dotenv()
     result = MultiAccountEngine().run(
         args.account_id, dry_run=not args.live, confirm=args.live,
-        aweme_id=args.aweme_id,
+        aweme_id=args.aweme_id, keyword=args.keyword,
     )
     print(json.dumps(result, ensure_ascii=False))
     return 0

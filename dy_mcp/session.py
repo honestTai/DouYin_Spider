@@ -23,7 +23,7 @@ class DouyinSession:
         with self._lock:
             cookie = (os.getenv("DY_COOKIES") or "").strip()
             if not cookie:
-                raise RuntimeError("MCP 服务需要在 .env 中配置 DY_COOKIES")
+                raise RuntimeError("需要在 .env 中配置 DY_COOKIES")
             proxy = self._pool.for_session(cookie)
             if self._auth is not None and self._session_key == cookie and self._proxy == proxy:
                 return self._auth
