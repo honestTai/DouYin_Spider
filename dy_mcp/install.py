@@ -8,6 +8,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVER_NAME = "douyin-engagement"
+TOOL_NAMES = [
+    "run_engagement",
+    "list_adspower_profiles",
+    "upsert_account",
+    "list_accounts",
+    "run_account_once",
+    "configure_scheduler",
+    "list_activity",
+]
 
 
 def launch_command(root=ROOT):
@@ -21,7 +30,7 @@ def server_config(root=ROOT):
         "args": command[1:],
         "cwd": str(root),
         "enabled": True,
-        "enabledTools": ["run_engagement"],
+        "enabledTools": TOOL_NAMES,
         "startupTimeoutMs": 30000,
         "toolTimeoutMs": 120000,
     }

@@ -71,14 +71,14 @@ def get_profile() -> dict[str, str]:
             # browser; this header is present on both passport and mssdk XHRs.
             "sec_ch_ua": (f'"Google Chrome";v="{major}", "Chromium";v="{major}", '
                           f'"Not(A:Brand";v="24"'),
-            "sec_ch_ua_platform": '"Windows"',
+            "sec_ch_ua_platform": f'"{_env("os_name", "Windows")}"',
             "browser_name": "Chrome",
             "browser_version": _env("browser_version", _DEFAULTS["browser_version"]),
             "engine_name": "Blink",
             "engine_version": _env("engine_version", _DEFAULTS["engine_version"]),
-            "os_name": "Windows",
-            "os_version": "10",
-            "platform": "Win32",
+            "os_name": _env("os_name", "Windows"),
+            "os_version": _env("os_version", "10"),
+            "platform": _env("platform", "Win32"),
             "cpu_core_num": _env("cpu_core_num", _DEFAULTS["cpu_core_num"]),
             "device_memory": _env("device_memory", _DEFAULTS["device_memory"]),
             "webgl_vendor": _env("webgl_vendor", _DEFAULTS["webgl_vendor"]),

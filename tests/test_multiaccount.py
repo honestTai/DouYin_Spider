@@ -1,0 +1,179 @@
+import sqlite3
+from unittest.mock import Mock
+
+from dy_mcp.engine import MultiAccountEngine
+from dy_mcp.store import AccountStore
+
+
+def work(aweme_id, digg, comments):
+    return {
+        "aweme_info": {
+            "aweme_id": aweme_id,
+            "desc": f"作品 {aweme_id}",
+            "author": {"uid": "100", "nickname": "作者"},
+            "statistics": {"digg_count": digg, "comment_count": comments},
+        }
+    }
+
+
+def runtime_loader(_account):
+    return {"DY_COOKIES": "sessionid=test"}, {"profile_id": "profile-one"}
+
+
+def make_account(store, name="账号一", profile_id="profile-one", **overrides):
+    values = {
+        "keywords": ["Claude"],
+        "comment_texts": ["测试评论"],
+        "min_digg_count": 1000,
+        "max_comment_count": 100,
+    }
+    values.update(overrides)
+    return store.upsert_account(name, profile_id, **values)
+
+
+def make_engine(store, api):
+    auth = Mock()
+    return MultiAccountEngine(
+        store, runtime_loader=runtime_loader, api=api,
+        auth_factory=lambda *_args, **_kwargs: auth,
+    )
+
+
+def test_preview_ranks_high_digg_low_comment_without_publishing(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store)
+    api = Mock()
+    api.search_some_general_work.return_value = [
+        work("low-ratio", 10000, 100),
+        work("best", 9000, 1),
+        work("too-small", 500, 0),
+        work("too-many-comments", 100000, 1000),
+    ]
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"])
+
+    assert result["status"] == "preview"
+    assert [item["aweme_id"] for item in result["works"]] == ["best", "low-ratio"]
+    api.publish_comment.assert_not_called()
+    assert store.get_run(result["run_id"])["status"] == "preview"
+
+
+def test_accounts_independently_comment_same_work_without_self_duplicates(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    first = make_account(store)
+    second = make_account(store, "账号二", "profile-two")
+    api = Mock()
+    api.search_some_general_work.return_value = [work("only-one", 9000, 1)]
+    api.publish_comment.return_value = {"status_code": 0}
+    engine = make_engine(store, api)
+
+    first_result = engine.run(first["id"], dry_run=False, confirm=True)
+    second_result = engine.run(second["id"], dry_run=False, confirm=True)
+    duplicate = engine.run(first["id"], dry_run=False, confirm=True)
+
+    assert first_result["status"] == "completed"
+    assert second_result["status"] == "completed"
+    assert duplicate["status"] == "no_candidates"
+    assert store.work_status("only-one", first["id"]) == "published"
+    assert store.work_status("only-one", second["id"]) == "published"
+    assert store.count_published(first["id"], hours=1) == 1
+    assert store.count_published(second["id"], hours=1) == 1
+    assert api.publish_comment.call_count == 2
+
+
+def test_verification_error_pauses_account_for_scheduler(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store)
+    api = Mock()
+    api.search_some_general_work.return_value = [work("risk", 9000, 1)]
+    api.publish_comment.side_effect = RuntimeError("需要二次身份验证（scene=comment）")
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"], dry_run=False, confirm=True)
+    selected, _reason = store.next_account(min_interval_seconds=0)
+
+    assert result["status"] == "failed"
+    assert result["account_status"] == "verification_required"
+    assert store.work_status("risk") == ""
+    assert selected is None
+
+
+def test_scheduler_rotates_accounts_and_enforces_account_hour_limit(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    first = make_account(store, per_hour_limit=1)
+    second = make_account(store, "账号二", "profile-two")
+    run_id = store.create_run(first["id"], "Claude", "测试评论", False)
+    store.reserve_work("done", first["id"], run_id, 1000, 1)
+    store.publish_work("done")
+    store.finish_run(run_id, "completed", selected_id="done")
+
+    selected, _reason = store.next_account(global_per_hour=20, min_interval_seconds=0)
+    accounts = store.list_accounts()
+
+    assert selected["id"] == second["id"]
+    assert accounts[0]["comments_last_hour"] == 1
+    assert store.count_published(hours=1) == 1
+
+
+def test_store_defaults_keep_scheduler_in_dry_run(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+
+    settings = store.settings()
+
+    assert settings["enabled"] == "false"
+    assert settings["dry_run"] == "true"
+    assert settings["global_per_hour"] == "20"
+    assert settings["min_interval_seconds"] == "180"
+
+
+def test_targeted_comment_skips_search(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store)
+    api = Mock()
+    api.publish_comment.return_value = {"status_code": 0}
+    engine = make_engine(store, api)
+
+    result = engine.run(
+        account["id"], dry_run=False, confirm=True, aweme_id="direct-work",
+    )
+
+    assert result["status"] == "completed"
+    assert result["work"]["aweme_id"] == "direct-work"
+    api.search_some_general_work.assert_not_called()
+    api.publish_comment.assert_called_once()
+
+
+def test_legacy_global_engagements_migrate_to_account_scope(tmp_path):
+    path = tmp_path / "accounts.db"
+    store = AccountStore(path)
+    account = make_account(store)
+    run_id = store.create_run(account["id"], "Claude", "测试评论", False)
+    store.reserve_work("shared-work", account["id"], run_id, 1000, 1)
+    store.publish_work("shared-work", account["id"])
+    store.finish_run(run_id, "completed", selected_id="shared-work")
+    with sqlite3.connect(path) as db:
+        db.executescript(
+            """
+            ALTER TABLE engagements RENAME TO engagements_current;
+            CREATE TABLE engagements (
+                aweme_id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                digg_count INTEGER NOT NULL,
+                comment_count INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            INSERT INTO engagements SELECT * FROM engagements_current;
+            DROP TABLE engagements_current;
+            """
+        )
+
+    migrated = AccountStore(path)
+
+    assert migrated.work_status("shared-work", account["id"]) == "published"
+    with migrated.connect() as db:
+        primary_key = {row[1]: row[5] for row in db.execute("PRAGMA table_info(engagements)") if row[5]}
+        assert primary_key == {"aweme_id": 2, "account_id": 1}
+        assert list(db.execute("PRAGMA foreign_key_check")) == []

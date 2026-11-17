@@ -1,69 +1,53 @@
 <div align="center">
-  <a href="https://github.com/honestTai/DouYin_Spider/tree/feature/mcp-engagement">
-    <img width="180" src="./author/logo.jpg" alt="DouYin Engagement MCP">
-  </a>
+  <img width="160" src="./author/logo.jpg" alt="Douyin Multi-Agent MCP">
 
-  # DouYin Engagement MCP
+  # Douyin Multi-Agent MCP
 
-  ### 让 Agent 按关键词找到抖音作品，在确认后完成评论与作者私信
-
-  **一个可接入 Kimi Code、Codex、Claude Code 及其他 MCP 客户端的定制工具。**
+  **多账号、独立浏览器环境、图片评论与定时调度的抖音 MCP 服务**
 
   [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
   [![MCP](https://img.shields.io/badge/MCP-stdio-6c5ce7)](https://modelcontextprotocol.io/)
-  [![Agents](https://img.shields.io/badge/Agents-Kimi%20%C2%B7%20Codex%20%C2%B7%20Claude-success)](#-安装到-agent)
-
-  **[快速开始](#-快速开始) · [能力](#-能力) · [安装到 Agent](#-安装到-agent) · [使用说明](#-使用说明)**
+  [![SQLite](https://img.shields.io/badge/SQLite-local-044a64)](https://www.sqlite.org/)
+  [![Agents](https://img.shields.io/badge/Kimi%20%C2%B7%20Codex%20%C2%B7%20Claude-success)](#安装到-agent)
 
 </div>
 
-> 本项目基于抖音 Web 私有接口，不是抖音官方开放 API。默认仅预览，真实评论和私信需要显式确认。请勿用于垃圾评论、骚扰私信、违法内容或绕过平台管理。
+> 这是基于 `cv-cat/Douyin_Spider` 深度定制的独立分支，不再只是上游采集接口的简单封装。项目使用抖音 Web 私有接口，不是官方开放 API。默认仅预览；真实评论必须显式确认。请仅在已授权账号和内容上使用，并遵守平台规则及适用法律。
 
-## ❤️ Sponsor
+## 核心能力
 
-| Sponsor | What it is |
-| :--- | :--- |
-| [HRouter](https://hrouter.net/home) | **[HRouter](https://hrouter.net/home)**：面向 AI 编码与应用开发的模型接入、API Key 管理和用量跟踪服务，也是本项目维护者正在建设的产品。 |
+- **多账号独立执行**：每个账号拥有自己的关键词、评论文字、图片、环境、IP、限额和执行历史。
+- **高赞低评筛选**：按最多点赞建立候选池，再按互动比值选择目标。
+- **文字与图片评论**：支持文字、图片、文字加图片，以及指定作品定向评论。
+- **多种浏览器环境**：AdsPower、本机 Chrome WebBridge、Chromium CDP、Firefox WebDriver BiDi。
+- **独立 IP**：AdsPower 自动读取环境代理；本地账号可配置独立 HTTP/SOCKS5 代理。
+- **定时调度**：独立后台进程、全局限速、账号轮换、每日限额、风控熔断。
+- **SQLite 数据**：账号策略、作品去重、运行记录、调度配置均持久化保存。
+- **Agent 数据查询**：直接查看账号状态、候选作品、点赞数、评论数、上传 URI 和失败原因。
 
-## ✨ 为什么使用它
+## 账号隔离规则
 
-**Agent 原生接入。** 通过标准 MCP stdio 服务，让 Agent 直接理解并调用一个边界清晰的业务工具，不需要复制接口代码或手动拼接请求。
+每个账号分别配置并独立轮换：
 
-**先预览，再执行。** 默认只返回候选作品。只有同时设置 `dry_run=false` 和 `confirm=true`，才会真正发布评论和私信。
-
-**单一职责。** 本定制分支只突出“搜索相关作品 → 评论 → 私信作者”流程，不把直播、创作者发布等其他能力暴露给 Agent。
-
-**会话级代理。** 同一 Cookie 固定使用同一个代理，业务请求及签名辅助请求共享出口，避免执行过程中频繁更换 IP。
-
-## 🧭 工作流程
-
-```mermaid
-flowchart LR
-    A[输入关键词与文案] --> B[搜索相关作品]
-    B --> C[返回候选作品预览]
-    C --> D{确认执行}
-    D -->|否| E[结束，不产生写操作]
-    D -->|是| F[发布作品评论]
-    F --> G[私信作品作者]
-    G --> H[返回分项执行状态]
+```text
+搜索关键词
+评论文字
+评论图片
+浏览器环境
+代理/IP
+小时与每日限额
+作品去重状态
 ```
 
-## 🧩 能力
+去重按 `(account_id, aweme_id)` 保存：
 
-| 能力 | 实现方式 |
-| :--- | :--- |
-| 相关作品搜索 | 按关键词、排序方式和发布时间查找候选作品 |
-| 发布评论 | 对候选作品逐个发布指定评论文本 |
-| 作者私信 | 创建会话并向作品作者发送指定文本 |
-| 执行保护 | 默认预览、显式确认、单次数量限制、失败即停 |
-| 状态反馈 | 分别返回评论与私信状态，区分失败、部分完成和全部完成 |
-| 代理池 | JSON 数组或逗号分隔配置；同一登录会话稳定分配代理 |
-| 多 Agent 安装 | 一个安装器支持 Kimi Code、Codex、Claude Code 和通用 JSON |
-| 独立启动入口 | 不依赖调用方当前目录，固定从项目根目录加载配置 |
+- 同一账号不会重复评论同一作品。
+- 不同账号可以评论同一作品。
+- 全局只共享调度频率和最小执行间隔，不共享内容或作品去重状态。
 
-## 🚀 快速开始
+## 快速开始
 
-### 1. 获取分支并创建环境
+### 1. 获取项目
 
 ```bash
 git clone -b feature/mcp-engagement https://github.com/honestTai/DouYin_Spider.git
@@ -71,7 +55,7 @@ cd DouYin_Spider
 python3.10 -m venv .venv
 ```
 
-macOS / Linux 后续命令使用 `.venv/bin/python`；Windows 请替换为 `.venv\Scripts\python.exe`。
+macOS / Linux 下文使用 `.venv/bin/python`；Windows 替换为 `.venv\Scripts\python.exe`。
 
 ### 2. 安装依赖
 
@@ -80,118 +64,60 @@ macOS / Linux 后续命令使用 `.venv/bin/python`；Windows 请替换为 `.ven
 .venv/bin/python -m pip install 'protobuf>=5.27'
 ```
 
-上游依赖 `blackboxprotobuf` 声明固定使用 `protobuf==3.10`，而项目生成的 Protobuf 代码需要 5.27 以上版本。上述顺序保留项目当前的兼容安装方式，并在最后恢复所需的 Protobuf 版本。
+### 3. 配置单账号凭据
 
-### 3. 配置登录与代理
+复制 `.env.example` 为 `.env`，填写当前账号的浏览器凭据：
 
 ```bash
-cp .env.example .env
-```
-
-至少在 `.env` 中配置：
-
-```dotenv
-DY_COOKIES='你的完整登录 Cookie'
+DY_COOKIES=''
 DY_TICKET=''
 DY_TS_SIGN=''
 DY_CLIENT_CERT=''
 DY_PRIVATE_KEY=''
 DY_DTRAIT_BLOB=''
-DY_DTRAIT_PROFILE=''
-DY_PROXY_POOL=''
 ```
 
-Cookie 必须来自已登录的 `www.douyin.com`，并包含 `UIFID`。评论和私信属于写接口，通常还需要与当前 Cookie 同一次登录会话的 `ticket/ts_sign` 和 dtrait 设备素材，不能混用不同会话的旧凭据。
+这些值必须来自同一次浏览器登录会话。多账号模式不必共享 `.env`，会在各自工作进程中从对应浏览器环境读取。
 
-代理池为可选项：
-
-```dotenv
-DY_PROXY_POOL='["http://user:pass@proxy-one:8080", "http://user:pass@proxy-two:8080"]'
-```
-
-`.env` 已加入 Git 忽略。不要把 Cookie、私钥或代理密码提交到仓库，也不要直接粘贴到 Agent 对话中。
-
-## 🔌 安装到 Agent
-
-在项目根目录使用虚拟环境 Python 执行安装器。安装器只写启动配置，不复制登录凭据。
-
-| Agent | 安装命令 | 配置范围 |
-| :--- | :--- | :--- |
-| Kimi Code | `.venv/bin/python -m dy_mcp.install --agent kimi` | 当前项目 `.kimi-code/mcp.json` |
-| Codex | `.venv/bin/python -m dy_mcp.install --agent codex` | Codex 用户级 MCP 配置 |
-| Claude Code | `.venv/bin/python -m dy_mcp.install --agent claude` | 当前项目的 local 配置 |
-
-一次安装全部：
-
-```bash
-.venv/bin/python -m dy_mcp.install --agent all
-```
-
-某个 Agent CLI 不存在时，`all` 会继续安装其他 Agent，最后以非零状态报告未完成的安装。
-
-其他 MCP 客户端可以输出通用 JSON：
-
-```bash
-.venv/bin/python -m dy_mcp.install --agent json
-```
-
-安装后重新启动 Agent 或新开会话：
-
-- **Kimi Code**：输入 `/mcp` 查看连接状态。
-- **Codex**：执行 `codex mcp list`，或在 TUI 中输入 `/mcp`。
-- **Claude Code**：执行 `claude mcp list`；如果提示项目信任或服务器审批，先核对启动命令再确认。
-
-也可以直接验证 stdio 服务：
+### 4. 验证 MCP
 
 ```bash
 .venv/bin/python mcp_server.py
 ```
 
-该命令通过标准输入输出通信，正常启动后等待 MCP 客户端连接，不会主动执行评论或私信。
+服务通过标准输入输出通信，启动后等待 MCP 客户端连接，不会主动评论或私信。
 
-## 🛠️ 使用说明
+## 安装到 Agent
 
-MCP 服务只暴露一个工具：`run_engagement`。
+```bash
+# Kimi Code：当前项目 .kimi-code/mcp.json
+.venv/bin/python -m dy_mcp.install --agent kimi
 
-### 参数
+# Codex
+.venv/bin/python -m dy_mcp.install --agent codex
 
-| 参数 | 默认值 | 说明 |
-| :--- | :--- | :--- |
-| `query` | 必填 | 搜索关键词 |
-| `comment_text` | 必填 | 发布到每个候选作品的评论文本 |
-| `message_text` | 必填 | 发送给每个作品作者的私信文本 |
-| `limit` | `3` | 最多处理作品数，范围 1–20 |
-| `dry_run` | `true` | 是否只搜索和预览 |
-| `confirm` | `false` | 真实执行确认 |
-| `sort_type` | `0` | `0` 综合、`1` 最多点赞、`2` 最新发布 |
-| `publish_time` | `0` | `0` 不限、`1` 一天内、`7` 一周内、`180` 半年内 |
-| `interval_seconds` | `3.0` | 每个作品之间的等待秒数，范围 0–60 |
+# Claude Code
+.venv/bin/python -m dy_mcp.install --agent claude
 
-### 第一步：只预览
-
-直接对 Agent 说：
-
-```text
-使用 douyin-engagement 搜索“榴莲”相关作品，limit=1，dry_run=true。
-评论文案为“这个内容很有帮助”，私信文案为“你好，想请教一下相关问题”。
-只返回预览，不实际评论或私信。
+# 输出通用 JSON
+.venv/bin/python -m dy_mcp.install --agent json
 ```
 
-等价的工具参数：
+安装后重启 Agent 或新开会话。Kimi Code 可用 `/mcp` 查看连接状态。
 
-```json
-{
-  "query": "榴莲",
-  "comment_text": "这个内容很有帮助",
-  "message_text": "你好，想请教一下相关问题",
-  "limit": 1,
-  "dry_run": true
-}
-```
+## MCP 工具
 
-### 第二步：确认执行
+| 工具 | 用途 |
+| :--- | :--- |
+| `run_engagement` | 单账号搜索、文字/图片评论，可选作者私信 |
+| `list_adspower_profiles` | 列出 AdsPower 环境，不返回 Cookie 或代理密码 |
+| `upsert_account` | 新增或更新独立账号、环境、关键词、文案、图片和限额 |
+| `list_accounts` | 查看账号配置、状态、小时/每日评论数和最近结果 |
+| `run_account_once` | 独立进程搜索预览或真实评论；支持 `aweme_id` 定向执行 |
+| `configure_scheduler` | 查询、启动、停止定时调度并调整频率 |
+| `list_activity` | 查询 SQLite 中的真实运行记录 |
 
-核对候选作品和文案后，在同一会话中要求 Agent 使用相同参数，并明确修改：
+所有执行类工具默认 `dry_run=true`。真实评论必须同时设置：
 
 ```json
 {
@@ -200,81 +126,319 @@ MCP 服务只暴露一个工具：`run_engagement`。
 }
 ```
 
-建议第一次真实执行保持 `limit=1`，确认账号凭据、代理和目标均符合预期后再考虑扩大范围。
+## 单账号搜索与评论
 
-### 执行结果
-
-- `comment_status`：`pending`、`published` 或 `failed`。
-- `message_status`：`pending`、`sent` 或 `failed`。
-- `completed`：本次请求的作品均已完成评论和私信。
-- `partial`：已有部分写操作成功，但流程中途失败。
-- `failed`：没有写操作成功。
-- `stopped_on_error`：是否因任一作品失败而停止后续处理。
-
-## 🗂️ 定制部分结构
-
-```text
-mcp_server.py                 # 与调用目录无关的 stdio 启动入口
-dy_mcp/
-├── server.py                 # MCP 工具定义
-├── workflow.py               # 搜索、评论、私信流程
-├── session.py                # 登录会话与项目级 .env 加载
-├── proxy_pool.py             # 会话固定代理分配
-└── install.py                # 多 Agent 安装器
-tests/
-├── test_engagement_workflow.py
-├── test_mcp_proxy_pool.py
-└── test_mcp_installer.py
+```json
+{
+  "query": "AI Claude",
+  "comment_text": "这家claude是纯血的,0注入",
+  "message_text": "",
+  "limit": 1,
+  "dry_run": true,
+  "sort_type": "1"
+}
 ```
 
-原项目的数据采集、直播、创作者发布等代码仍保留在仓库中，但不会通过本 MCP 服务暴露。上游 `main.py` 当前包含主动私信示例，不要把它当作本 MCP 的启动入口。
+- `sort_type`：`0` 综合、`1` 最多点赞、`2` 最新发布。
+- `publish_time`：`0` 不限、`1` 一天内、`7` 一周内、`180` 半年内。
+- `message_text` 留空时不私信。
+- `comment_text` 可在仅图片评论时留空。
 
-## 🧪 开发验证
+## 多账号配置
+
+### AdsPower
+
+在 `.env` 中配置本地 API：
 
 ```bash
-.venv/bin/python -m pip install pytest
-.venv/bin/python -m pytest -q \
-  tests/test_engagement_workflow.py \
-  tests/test_mcp_proxy_pool.py \
-  tests/test_mcp_installer.py
+ADSPOWER_PORT='50325'
+ADSPOWER_API_KEY=''
 ```
 
-真实接口验证应先使用预览模式，再在测试账号和明确目标上以 `limit=1` 执行。离线测试不会验证抖音当前的风控策略、账号状态或线上接口可用性。
+绑定示例：
 
-## 📄 来源与使用边界
+```json
+{
+  "name": "账号 A",
+  "browser_type": "adspower",
+  "profile_no": "11",
+  "keywords": ["AI Claude", "Claude Code"],
+  "comment_texts": ["文案 A"],
+  "image_paths": ["/absolute/path/to/a.png"]
+}
+```
 
-本仓库是 **[cv-cat/Douyin_Spider](https://github.com/cv-cat/Douyin_Spider)** 的 fork，感谢原作者及贡献者开放数据采集、认证、签名、评论和私信等基础实现。
+AdsPower 的代理配置会同时用于搜索、签名和图片上传、评论请求，避免浏览器与 API 出口不一致。
 
-`feature/mcp-engagement` 是由 **[honestTai](https://github.com/honestTai)** 定制的 MCP 分支，新增跨 Agent 安装、预览确认、流程状态反馈和会话级代理管理。原项目相关权利与使用要求仍归原项目及相应权利人所有。
+### 本机 Chrome / WebBridge
+
+```json
+{
+  "name": "账号 B",
+  "browser_type": "webbridge",
+  "keywords": ["Claude Code"],
+  "comment_texts": ["文案 B"],
+  "image_paths": ["/absolute/path/to/b.png"]
+}
+```
+
+WebBridge 使用当前已连接的 Chrome 登录会话，不需要额外调试端口。
+
+### Chrome / Edge CDP
+
+先关闭对应浏览器的全部进程，再使用调试端口启动：
+
+```bash
+# Chrome
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9222
+
+# Edge
+"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
+  --remote-debugging-port=9223
+```
+
+账号配置：
+
+```json
+{
+  "name": "Edge 账号",
+  "browser_type": "edge",
+  "cdp_url": "http://127.0.0.1:9223",
+  "proxy_url": "http://127.0.0.1:8080",
+  "keywords": ["Claude"],
+  "comment_texts": ["Edge 独立文案"]
+}
+```
+
+`proxy_url` 必须与该浏览器的真实网络出口一致；只修改 API 代理并不能改变浏览器出口。
+
+### Firefox BiDi
+
+```bash
+firefox --remote-debugging-port 9224
+```
+
+```json
+{
+  "name": "Firefox 账号",
+  "browser_type": "firefox",
+  "cdp_url": "ws://127.0.0.1:9224/session",
+  "keywords": ["Claude"],
+  "comment_texts": ["Firefox 独立文案"]
+}
+```
+
+Firefox 使用 WebDriver BiDi，不使用 Chromium CDP。
+
+## 高赞低评与定向评论
+
+多账号模式先按最多点赞获取候选池，再计算：
+
+```text
+score = digg_count / (comment_count + 1)
+```
+
+默认配置：
+
+```text
+candidate_pool_size = 20
+min_digg_count = 100
+max_comment_count = 100
+per_hour_limit = 5
+per_day_limit = 20
+```
+
+返回的每个候选作品包含作品链接、标题、作者、点赞数、评论数和得分。搜索候选会随时间变化；已确认目标后可跳过搜索：
+
+```json
+{
+  "account_id": "账号ID",
+  "aweme_id": "作品ID",
+  "dry_run": false,
+  "confirm": true
+}
+```
+
+## 图片评论
+
+支持：
+
+- 纯文字评论
+- 纯图片评论
+- 文字加图片评论
+- 多账号图片轮换
+- 定向图片评论
+
+单账号示例：
+
+```json
+{
+  "query": "AI Claude",
+  "comment_text": "这家claude是纯血的,0注入",
+  "image_path": "/absolute/path/to/image.png",
+  "limit": 1,
+  "dry_run": false,
+  "confirm": true
+}
+```
+
+当前网页每张评论选择一张图片：
+
+- 格式：`png`、`jpeg`、`webp`、`bmp`
+- 大小：不超过 `10MB`
+- 宽高：均不超过 `10000` 像素
+
+上传链路与创作者发布和私信图片不同：
+
+```text
+GET /aweme/v1/web/comment/upload/auth/
+→ ImageX ApplyImageUpload
+→ TOS 字节上传
+→ ImageX CommitImageUpload
+→ /aweme/v1/web/comment/publish
+```
+
+发布字段为 `image_uri_list`、`image_widths`、`image_heights`、`image_formats`。真实结果中的 `image_upload` 返回实际上传 URI、宽高和格式；预览不会上传图片。
+
+## 定时调度
+
+调度器是独立后台进程，不依赖 stdio MCP 持续在线。默认配置：
+
+```text
+enabled = false
+dry_run = true
+global_per_hour = 20
+min_interval_seconds = 180
+poll_seconds = 15
+```
+
+启动预览调度：
+
+```json
+{
+  "action": "start",
+  "dry_run": true,
+  "global_per_hour": 20,
+  "min_interval_seconds": 180
+}
+```
+
+启动真实评论调度：
+
+```json
+{
+  "action": "start",
+  "dry_run": false,
+  "global_per_hour": 20,
+  "min_interval_seconds": 180,
+  "confirm": true
+}
+```
+
+停止：
+
+```json
+{
+  "action": "stop"
+}
+```
+
+调度器优先选择最久未执行且状态正常的账号，串行执行以避免突发并发。出现二次身份验证时，账号进入 `verification_required` 并暂停后续自动执行；人工处理后更新账号恢复。频率配置不保证降低风控概率。
+
+## 数据与日志
+
+```text
+.kimi-code/douyin.db       SQLite 账号、策略、去重、运行历史与调度配置
+.kimi-code/scheduler.log   调度日志
+.kimi-code/scheduler.pid   调度进程状态
+```
+
+数据库不保存 Cookie、浏览器私钥或 AdsPower API Key。本地配置、数据库和调度状态均已加入 `.gitignore`。
+
+## 主要返回数据
+
+搜索预览可能包含：
+
+```json
+{
+  "status": "preview",
+  "aweme_id": "作品ID",
+  "digg_count": 78006,
+  "comment_count": 17,
+  "score": 4333.67
+}
+```
+
+真实图片评论可能包含：
+
+```json
+{
+  "status": "completed",
+  "comment_status": "published",
+  "image_upload": {
+    "image_uri_list": "实际上传URI",
+    "image_widths": 3432,
+    "image_heights": 1766,
+    "image_formats": "png"
+  }
+}
+```
+
+账号查询返回 `comments_last_hour`、`comments_today`、最近运行状态及错误；历史查询返回 `run_id`、候选数、选中作品和起止时间。
+
+## 项目结构
+
+```text
+mcp_server.py                 MCP stdio 启动入口
+dy_apis/
+├── douyin_api.py             搜索、文字/图片评论与私信接口
+└── douyin_comment_media.py   评论图片 STS、ImageX 上传与字段转换
+dy_mcp/
+├── server.py                 7 个 MCP 工具
+├── workflow.py               单账号执行流程
+├── engine.py                 多账号筛选、独立去重与风控熔断
+├── adspower.py               AdsPower MCP、CDP 与代理采集
+├── browser_runtime.py        WebBridge、Chromium CDP、Firefox BiDi
+├── store.py                  SQLite 配置、限额、去重与历史
+├── scheduler.py              独立定时调度进程
+├── worker.py                 账号独立工作进程
+├── session.py                单账号会话
+├── proxy_pool.py             稳定代理配置
+└── install.py                多 Agent 安装器
+tests/                        离线单元与流程测试
+```
+
+## 测试与部署检查
+
+```bash
+.venv/bin/python -m pytest -q \
+  tests/test_comment_media.py \
+  tests/test_engagement_workflow.py \
+  tests/test_multiaccount.py \
+  tests/test_browser_runtime.py \
+  tests/test_adspower.py \
+  tests/test_mcp_proxy_pool.py \
+  tests/test_mcp_installer.py \
+  tests/test_dtrait_profile.py::test_fingerprint_platform_env_overrides \
+  tests/test_search_filters.py \
+  tests/test_write_dtrait.py
+```
+
+本地部署：
+
+```bash
+.venv/bin/python -m dy_mcp.install --agent kimi
+```
+
+重新启动 Agent 后即可使用新工具。真实浏览器验证应先预览，再对明确账号、作品、文字和图片执行一次真实评论。
+
+Docker 启动入口同样是 `mcp_server.py`。容器内 MCP 使用 stdio；AdsPower、WebBridge 和本地浏览器调试服务需要在容器外部单独提供网络连接。
+
+## 上游致谢
+
+本项目是 **[cv-cat/Douyin_Spider](https://github.com/cv-cat/Douyin_Spider)** 的 fork。感谢原作者及贡献者开放数据采集、认证、签名、评论和私信等基础实现。
+
+当前 `feature/mcp-engagement` 分支由 **[honestTai](https://github.com/honestTai)** 深度定制，新增多 Agent 接入、多账号独立执行、AdsPower 与本地浏览器环境、SQLite、图片评论、作品级去重和定时调度。原项目相关权利与使用要求仍归原项目及相应权利人所有。
 
 本项目仅供学习与技术研究。使用者需要自行确认账号授权、内容合规、平台规则及适用法律，不得用于发布不良信息、垃圾互动或骚扰他人。
-
-## 🧰 More from honestTai
-
-| Project | What it does |
-| :--- | :--- |
-| [**geo-console**](https://github.com/honestTai/geo-console) | 面向品牌团队的证据驱动 GEO 工作台 |
-| [**HRouter Desktop**](https://github.com/honestTai/HRouter-Desktop) | 本地优先的 AI 编码 Agent、模型与路由管理工作台 |
-| [**hrouter-market-pulse**](https://github.com/honestTai/hrouter-market-pulse) | A 股、港股和美股研究工作台与 Codex 插件 |
-| [**seehtml-ai**](https://github.com/honestTai/seehtml-ai) | 从想法到 HTML、演示文稿或视频的本地创作工具 |
-
-[查看全部公开项目 →](https://github.com/honestTai)
-
----
-
-<div align="center">
-
-Made by **[honestTai](https://github.com/honestTai)** · Based on **[cv-cat/Douyin_Spider](https://github.com/cv-cat/Douyin_Spider)**
-
-如果这个项目对你有帮助，欢迎 Star、Fork，或在 Issues 中分享建议。
-
-</div>
-
-## 📈 Project activity
-
-<a href="https://www.star-history.com/#honestTai/DouYin_Spider&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=honestTai/DouYin_Spider&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=honestTai/DouYin_Spider&type=Date" alt="Star history of DouYin_Spider fork">
-  </picture>
-</a>

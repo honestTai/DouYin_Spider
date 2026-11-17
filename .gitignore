@@ -59,5 +59,8 @@ live.*.log
 live.*.json
 live.*/
 
-# 本机 Agent MCP 启动配置包含绝对路径，不随仓库共享
+# 本机 Agent MCP 启动配置、账号数据库与调度进程状态，不随仓库共享
 /.kimi-code/mcp.json
+/.kimi-code/*.db
+/.kimi-code/*.db-*
+/.kimi-code/scheduler.pid

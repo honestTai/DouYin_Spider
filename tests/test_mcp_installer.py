@@ -26,7 +26,7 @@ def test_kimi_install_merges_existing_servers(tmp_path):
     assert config["mcpServers"]["existing"] == {"command": "existing"}
     server = config["mcpServers"][install.SERVER_NAME]
     assert server["args"] == [str(tmp_path / "mcp_server.py")]
-    assert server["enabledTools"] == ["run_engagement"]
+    assert server["enabledTools"] == install.TOOL_NAMES
     assert str(path) in message
 
 

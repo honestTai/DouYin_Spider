@@ -10,17 +10,16 @@ class EngagementWorkflow:
         self.api = api
         self._lock = threading.Lock()
 
-    def run(self, query, comment_text, message_text, *, limit=3, dry_run=True,
+    def run(self, query, comment_text, message_text, *, image_path="", limit=3, dry_run=True,
             confirm=False, sort_type="0", publish_time="0", interval_seconds=3.0):
         query = str(query or "").strip()
         comment_text = str(comment_text or "").strip()
         message_text = str(message_text or "").strip()
+        image_path = str(image_path or "").strip()
         if not query:
             raise ValueError("query 不能为空")
-        if not comment_text:
-            raise ValueError("comment_text 不能为空")
-        if not message_text:
-            raise ValueError("message_text 不能为空")
+        if not comment_text and not image_path:
+            raise ValueError("comment_text 和 image_path 不能同时为空")
         if not 1 <= limit <= 20:
             raise ValueError("limit 必须在 1 到 20 之间")
         if sort_type not in {"0", "1", "2"}:
@@ -44,13 +43,19 @@ class EngagementWorkflow:
                 "proxy": getattr(self.session, "proxy_label", "unknown"),
                 "comment_text": comment_text,
                 "message_text": message_text,
+                "image_path": image_path,
             }
             if dry_run:
+                planned_actions = ["publish_comment"]
+                if image_path:
+                    planned_actions.insert(0, "upload_comment_image")
+                if message_text:
+                    planned_actions.append("private_message_author")
                 return {
                     **base,
                     "status": "preview",
                     "works": candidates,
-                    "planned_actions": ["publish_comment", "private_message_author"],
+                    "planned_actions": planned_actions,
                     "message": "仅预览，未发布评论或私信",
                 }
             return self._execute(auth, candidates, base, interval_seconds)
@@ -62,22 +67,26 @@ class EngagementWorkflow:
             result = {
                 **candidate,
                 "comment_status": "pending",
-                "message_status": "pending",
+                "message_status": "pending" if base["message_text"] else "skipped",
             }
             try:
+                image_options = {"image_path": base["image_path"]} if base["image_path"] else {}
                 response = self.api.publish_comment(
-                    auth, candidate["aweme_id"], base["comment_text"],
+                    auth, candidate["aweme_id"], base["comment_text"], **image_options,
                 )
+                if response.get("image_upload"):
+                    result["image_upload"] = response["image_upload"]
                 if response.get("status_code") not in (0, "0"):
                     raise RuntimeError(
                         f"评论接口返回 status_code={response.get('status_code')}: "
                         f"{response.get('status_msg') or response.get('message') or '未知错误'}"
                     )
                 result["comment_status"] = "published"
-                conversation = self.api.create_conversation(auth, int(candidate["author_uid"]))
-                if not self.api.send_msg(auth, *conversation, base["message_text"]):
-                    raise RuntimeError("私信接口未返回成功")
-                result["message_status"] = "sent"
+                if base["message_text"]:
+                    conversation = self.api.create_conversation(auth, int(candidate["author_uid"]))
+                    if not self.api.send_msg(auth, *conversation, base["message_text"]):
+                        raise RuntimeError("私信接口未返回成功")
+                    result["message_status"] = "sent"
                 result["status"] = "completed"
             except Exception as error:
                 result["status"] = "partial" if result["comment_status"] == "published" else "failed"

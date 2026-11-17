@@ -42,6 +42,33 @@ def test_preview_searches_without_writing():
     api.send_msg.assert_not_called()
 
 
+def test_comment_only_preview_has_no_message_action():
+    workflow, _auth, _session, api = make_workflow()
+
+    result = workflow.run("猫", "评论文案", "")
+
+    assert result["planned_actions"] == ["publish_comment"]
+    api.create_conversation.assert_not_called()
+    api.send_msg.assert_not_called()
+
+
+def test_execution_can_comment_without_messaging():
+    workflow, auth, _session, api = make_workflow()
+    api.publish_comment.return_value = {"status_code": 0}
+
+    result = workflow.run(
+        "猫", "评论文案", "",
+        dry_run=False, confirm=True, interval_seconds=0,
+    )
+
+    assert result["status"] == "completed"
+    assert result["results"][0]["comment_status"] == "published"
+    assert result["results"][0]["message_status"] == "skipped"
+    api.publish_comment.assert_called_once_with(auth, "7400000000000000000", "评论文案")
+    api.create_conversation.assert_not_called()
+    api.send_msg.assert_not_called()
+
+
 def test_execution_requires_explicit_confirmation_before_auth():
     workflow, _auth, session, api = make_workflow()
 

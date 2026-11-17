@@ -2038,6 +2038,12 @@ class DouyinAPI:
         if "://" in str(aweme_id):
             aweme_id, _url = parse_aweme_id(aweme_id)
         refer = f"https://www.douyin.com/video/{aweme_id}"
+        uploaded_image = {}
+        if kwargs.get("image_path"):
+            from dy_apis.douyin_comment_media import upload_comment_image
+            uploaded_image = upload_comment_image(
+                auth, kwargs["image_path"], proxies=getattr(auth, "_proxies", None),
+            )
         headers = HeaderBuilder().build(HeaderType.FORM)
         headers.set_header("origin", DouyinAPI.douyin_url)
         headers.set_referer(refer)
@@ -2056,7 +2062,7 @@ class DouyinAPI:
         params.add_param("aid", '6383')
         params.add_param("channel", 'channel_pc_web')
         params.add_param("pc_client_type", '1')
-        params.add_param("pc_libra_divert", 'Windows')
+        params.add_param("pc_libra_divert", get_profile()["os_name"])
         params.add_param("update_version_code", '170400')
         params.add_param("support_h265", '1')
         params.add_param("support_dash", '1')
@@ -2066,14 +2072,14 @@ class DouyinAPI:
         params.add_param("screen_width", get_profile()["screen_width"])
         params.add_param("screen_height", get_profile()["screen_height"])
         params.add_param("browser_language", 'zh-CN')
-        params.add_param("browser_platform", 'Win32')
+        params.add_param("browser_platform", get_profile()["platform"])
         params.add_param("browser_name", get_profile()["browser_name"])
         params.add_param("browser_version", get_profile()["browser_version"])
         params.add_param("browser_online", 'true')
         params.add_param("engine_name", 'Blink')
         params.add_param("engine_version", get_profile()["engine_version"])
-        params.add_param("os_name", 'Windows')
-        params.add_param("os_version", '10')
+        params.add_param("os_name", get_profile()["os_name"])
+        params.add_param("os_version", get_profile()["os_version"])
         params.add_param("cpu_core_num", get_profile()["cpu_core_num"])
         params.add_param("device_memory", get_profile()["device_memory"])
         params.add_param("platform", 'PC')
@@ -2109,6 +2115,10 @@ class DouyinAPI:
         data["text_extra"] = (text_extra if isinstance(text_extra, str) else
                                json.dumps(text_extra, ensure_ascii=False,
                                           separators=(',', ':')))
+        for name in ("image_uri_list", "image_widths", "image_heights", "image_formats"):
+            value = kwargs.get(name, uploaded_image.get(name))
+            if value not in (None, ""):
+                data[name] = value
         params.with_a_bogus(data)
         # uid 在 a_bogus 之后追加，不参与签名
         uid = DouyinAPI._comment_uid(auth)
@@ -2120,6 +2130,8 @@ class DouyinAPI:
                             cookies=auth.cookie, data=data, verify=False)
         check_risk_response(res)
         result = res.json()
+        if uploaded_image:
+            result["image_upload"] = uploaded_image
         if (result.get('status_code') == 0
                 and hasattr(auth, "publish_server_verified")):
             auth.publish_server_verified = True
