@@ -250,6 +250,8 @@ Firefox 使用 WebDriver BiDi，不使用 Chromium CDP。
 score = digg_count / (comment_count + 1)
 ```
 
+账号也可设置 `content_strategy="latest"` 使用截评策略：搜索最近 24 小时内内容（`sort_type=2`、`publish_time=1`），保留接口的最新发布顺序，不再按互动比值重排。点赞下限、评论上限和账号级去重仍然生效。最新搜索无候选时会继续遍历该账号的剩余关键词，并回退到高赞低评搜索；全部搜索仍无候选时记录 `no_candidates`，不重复评论旧作品。
+
 默认配置：
 
 ```text
@@ -258,7 +260,11 @@ min_digg_count = 100
 max_comment_count = 100
 per_hour_limit = 5
 per_day_limit = 20
+batch_size = 1
+batch_interval_seconds = 15
 ```
+
+`batch_size` 是每轮最多评论的作品数（1–10），`batch_interval_seconds` 是同一轮作品之间的等待秒数（0–300）。实际批量大小会同时受全局每小时、账号每小时和账号每日剩余额度限制，不会因批量而突破限额。不同作品评论成功后会分别记录到 SQLite；任一作品失败会立即停止本轮后续评论，遇到二次验证会暂停该账号的调度。以上数值均可通过 `upsert_account` 和 `configure_scheduler` 修改，无需改代码。
 
 返回的每个候选作品包含作品链接、标题、作者、点赞数、评论数和得分。搜索候选会随时间变化；已确认目标后可跳过搜索：
 

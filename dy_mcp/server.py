@@ -52,6 +52,9 @@ def upsert_account(
     min_digg_count: int = 100,
     max_comment_count: int = 100,
     candidate_pool_size: int = 20,
+    content_strategy: str = "engagement",
+    batch_size: int = 1,
+    batch_interval_seconds: int = 15,
 ) -> dict:
     """新增或更新账号，绑定 AdsPower、WebBridge、Chrome、Edge 或 Firefox 环境。"""
     account = store.upsert_account(
@@ -60,7 +63,8 @@ def upsert_account(
         keywords=keywords, comment_texts=comment_texts, image_paths=image_paths, enabled=enabled,
         per_hour_limit=per_hour_limit, per_day_limit=per_day_limit,
         min_digg_count=min_digg_count, max_comment_count=max_comment_count,
-        candidate_pool_size=candidate_pool_size,
+        candidate_pool_size=candidate_pool_size, content_strategy=content_strategy,
+        batch_size=batch_size, batch_interval_seconds=batch_interval_seconds,
     )
     return {"status": "saved", "account": account}
 

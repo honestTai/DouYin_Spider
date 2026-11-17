@@ -52,6 +52,9 @@ class AccountStore:
                     min_digg_count INTEGER NOT NULL DEFAULT 100,
                     max_comment_count INTEGER NOT NULL DEFAULT 100,
                     candidate_pool_size INTEGER NOT NULL DEFAULT 20,
+                    content_strategy TEXT NOT NULL DEFAULT 'engagement',
+                    batch_size INTEGER NOT NULL DEFAULT 1,
+                    batch_interval_seconds INTEGER NOT NULL DEFAULT 15,
                     last_error TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -65,6 +68,7 @@ class AccountStore:
                     status TEXT NOT NULL,
                     candidate_count INTEGER NOT NULL DEFAULT 0,
                     selected_id TEXT,
+                    selected_ids TEXT NOT NULL DEFAULT '[]',
                     error TEXT,
                     started_at TEXT NOT NULL,
                     finished_at TEXT
@@ -125,9 +129,15 @@ class AccountStore:
                 ("cdp_url", "TEXT"),
                 ("proxy_url", "TEXT"),
                 ("image_paths", "TEXT NOT NULL DEFAULT '[]'"),
+                ("content_strategy", "TEXT NOT NULL DEFAULT 'engagement'"),
+                ("batch_size", "INTEGER NOT NULL DEFAULT 1"),
+                ("batch_interval_seconds", "INTEGER NOT NULL DEFAULT 15"),
             ):
                 if name not in columns:
                     db.execute(f"ALTER TABLE accounts ADD COLUMN {name} {definition}")
+            run_columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
+            if "selected_ids" not in run_columns:
+                db.execute("ALTER TABLE runs ADD COLUMN selected_ids TEXT NOT NULL DEFAULT '[]'")
             defaults = {
                 "enabled": "false",
                 "dry_run": "true",
@@ -156,13 +166,15 @@ class AccountStore:
                        browser_type="adspower", cdp_url="", proxy_url="",
                        keywords=None, comment_texts=None, image_paths=None, enabled=True,
                        per_hour_limit=5, per_day_limit=20, min_digg_count=100,
-                       max_comment_count=100, candidate_pool_size=20):
+                       max_comment_count=100, candidate_pool_size=20,
+                       content_strategy="engagement", batch_size=1, batch_interval_seconds=15):
         name = str(name or "").strip()
         profile_id = str(profile_id or "").strip()
         profile_no = str(profile_no or "").strip()
         browser_type = str(browser_type or "adspower").strip().lower()
         cdp_url = str(cdp_url or "").strip()
         proxy_url = str(proxy_url or "").strip()
+        content_strategy = str(content_strategy or "engagement").strip().lower()
         keywords = [str(item).strip() for item in (keywords or []) if str(item).strip()]
         comment_texts = [str(item).strip() for item in (comment_texts or []) if str(item).strip()]
         image_paths = [str(item).strip() for item in (image_paths or []) if str(item).strip()]
@@ -174,6 +186,12 @@ class AccountStore:
             raise ValueError("AdsPower 账号必须配置 profile_id 或 profile_no")
         if browser_type in {"chrome", "edge", "firefox"} and not cdp_url:
             raise ValueError("本地浏览器账号必须配置 cdp_url；Firefox 使用 BiDi WebSocket 地址")
+        if content_strategy not in {"engagement", "latest"}:
+            raise ValueError("content_strategy 只支持 engagement 或 latest")
+        if not 1 <= batch_size <= 10:
+            raise ValueError("batch_size 必须在 1 到 10 之间")
+        if not 0 <= batch_interval_seconds <= 300:
+            raise ValueError("batch_interval_seconds 必须在 0 到 300 之间")
         if not keywords:
             raise ValueError("至少配置一个搜索关键词")
         if not comment_texts and not image_paths:
@@ -192,8 +210,9 @@ class AccountStore:
                 INSERT INTO accounts(
                     id, name, profile_id, profile_no, browser_type, cdp_url, proxy_url,
                     keywords, comment_texts, image_paths, enabled, per_hour_limit, per_day_limit,
-                    min_digg_count, max_comment_count, candidate_pool_size, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    min_digg_count, max_comment_count, candidate_pool_size, content_strategy,
+                    batch_size, batch_interval_seconds, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name=excluded.name, profile_id=excluded.profile_id,
                     profile_no=excluded.profile_no, browser_type=excluded.browser_type,
@@ -205,6 +224,9 @@ class AccountStore:
                     min_digg_count=excluded.min_digg_count,
                     max_comment_count=excluded.max_comment_count,
                     candidate_pool_size=excluded.candidate_pool_size,
+                    content_strategy=excluded.content_strategy,
+                    batch_size=excluded.batch_size,
+                    batch_interval_seconds=excluded.batch_interval_seconds,
                     status='active', last_error=NULL, updated_at=excluded.updated_at
                 """,
                 (
@@ -214,7 +236,8 @@ class AccountStore:
                     json.dumps(comment_texts, ensure_ascii=False),
                     json.dumps(image_paths, ensure_ascii=False), int(enabled),
                     per_hour_limit, per_day_limit, min_digg_count,
-                    max_comment_count, candidate_pool_size, now, now,
+                    max_comment_count, candidate_pool_size, content_strategy,
+                    batch_size, batch_interval_seconds, now, now,
                 ),
             )
         return self.get_account(account_id)
@@ -260,18 +283,33 @@ class AccountStore:
             )
         return run_id
 
-    def finish_run(self, run_id, status, *, candidate_count=0, selected_id="", error=None):
+    def update_run_keyword(self, run_id, keyword):
+        with self.connect() as db:
+            db.execute("UPDATE runs SET keyword=? WHERE id=?", (keyword, run_id))
+
+    def finish_run(self, run_id, status, *, candidate_count=0, selected_id="",
+                   selected_ids=None, error=None):
+        selected_ids = selected_ids if selected_ids is not None else ([selected_id] if selected_id else [])
         with self.connect() as db:
             db.execute(
-                "UPDATE runs SET status=?, candidate_count=?, selected_id=?, error=?, finished_at=? "
-                "WHERE id=?",
-                (status, candidate_count, selected_id or None, error, utc_now(), run_id),
+                "UPDATE runs SET status=?, candidate_count=?, selected_id=?, selected_ids=?, "
+                "error=?, finished_at=? WHERE id=?",
+                (status, candidate_count, selected_id or None,
+                 json.dumps(selected_ids, ensure_ascii=False), error, utc_now(), run_id),
             )
+
+    @staticmethod
+    def _run(row):
+        if row is None:
+            return None
+        item = dict(row)
+        item["selected_ids"] = parse_json(item.get("selected_ids") or "[]")
+        return item
 
     def get_run(self, run_id):
         with self.connect() as db:
             row = db.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
-        return dict(row) if row else None
+        return self._run(row)
 
     def recent_runs(self, limit=50, account_id=""):
         with self.connect() as db:
@@ -282,7 +320,7 @@ class AccountStore:
                 ).fetchall()
             else:
                 rows = db.execute("SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (limit,)).fetchall()
-        return [dict(row) for row in rows]
+        return [self._run(row) for row in rows]
 
     @staticmethod
     def _cutoff(delta):

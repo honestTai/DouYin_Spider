@@ -1,5 +1,8 @@
 import sqlite3
-from unittest.mock import Mock
+from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock, patch
+
+import pytest
 
 from dy_mcp.engine import MultiAccountEngine
 from dy_mcp.store import AccountStore
@@ -177,3 +180,113 @@ def test_legacy_global_engagements_migrate_to_account_scope(tmp_path):
         primary_key = {row[1]: row[5] for row in db.execute("PRAGMA table_info(engagements)") if row[5]}
         assert primary_key == {"aweme_id": 2, "account_id": 1}
         assert list(db.execute("PRAGMA foreign_key_check")) == []
+
+
+def test_latest_strategy_searches_last_day_and_keeps_newest_order(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store, content_strategy="latest")
+    api = Mock()
+    api.search_some_general_work.return_value = [
+        work("newest", 2000, 50),
+        work("older-higher-score", 9000, 1),
+    ]
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"])
+
+    assert result["status"] == "preview"
+    assert result["content_strategy"] == "latest"
+    assert result["publish_time"] == "1"
+    assert [item["aweme_id"] for item in result["works"]] == [
+        "newest", "older-higher-score",
+    ]
+    api.search_some_general_work.assert_called_once()
+    assert api.search_some_general_work.call_args.args[3:] == ("2", "1")
+
+
+def test_latest_strategy_falls_back_to_engagement_when_empty(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(store, content_strategy="latest")
+    api = Mock()
+    api.search_some_general_work.side_effect = [[], [work("fallback", 9000, 1)]]
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"])
+
+    assert result["status"] == "preview"
+    assert result["content_strategy"] == "engagement"
+    assert result["publish_time"] == "0"
+    assert result["works"][0]["aweme_id"] == "fallback"
+    assert api.search_some_general_work.call_count == 2
+    assert result["searched_keywords"] == [
+        {"keyword": "Claude", "strategy": "latest"},
+        {"keyword": "Claude", "strategy": "engagement"},
+    ]
+
+
+def test_batch_publishes_distinct_works_within_quota(tmp_path):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(
+        store, batch_size=3, batch_interval_seconds=15,
+        per_hour_limit=10, per_day_limit=25,
+    )
+    api = Mock()
+    api.search_some_general_work.return_value = [
+        work("batch-one", 9000, 1),
+        work("batch-two", 8000, 2),
+        work("batch-three", 7000, 3),
+        work("batch-four", 6000, 4),
+    ]
+    api.publish_comment.return_value = {"status_code": 0}
+    engine = make_engine(store, api)
+
+    with patch("dy_mcp.engine.time.sleep") as sleep:
+        result = engine.run(account["id"], dry_run=False, confirm=True)
+
+    assert result["status"] == "completed"
+    assert result["completed_count"] == 3
+    assert result["failed_count"] == 0
+    assert [item["aweme_id"] for item in result["works"]] == [
+        "batch-one", "batch-two", "batch-three",
+    ]
+    assert store.get_run(result["run_id"])["selected_ids"] == [
+        "batch-one", "batch-two", "batch-three",
+    ]
+    assert store.count_published(account["id"], hours=1) == 3
+    assert api.publish_comment.call_count == 3
+    assert sleep.call_args_list == [((15,),), ((15,),)]
+
+
+@pytest.mark.parametrize("quota_kind", ["hour", "day"])
+def test_batch_respects_remaining_global_hour_and_daily_quotas(tmp_path, quota_kind):
+    store = AccountStore(tmp_path / "accounts.db")
+    account = make_account(
+        store, batch_size=3, per_hour_limit=10, per_day_limit=25,
+    )
+    store.update_settings(global_per_hour=10)
+    existing_count = 9 if quota_kind == "hour" else 24
+    for index in range(existing_count):
+        run_id = store.create_run(account["id"], "Claude", "测试评论", False)
+        store.reserve_work(f"existing-{index}", account["id"], run_id, 1000, 1)
+        store.publish_work(f"existing-{index}", account["id"])
+        store.finish_run(run_id, "completed", selected_id=f"existing-{index}")
+    if quota_kind == "day":
+        two_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        with store.connect() as db:
+            db.execute("UPDATE engagements SET created_at=?", (two_hours_ago,))
+    api = Mock()
+    api.search_some_general_work.return_value = [
+        work("quota-one", 9000, 1),
+        work("quota-two", 8000, 2),
+        work("quota-three", 7000, 3),
+    ]
+    api.publish_comment.return_value = {"status_code": 0}
+    engine = make_engine(store, api)
+
+    result = engine.run(account["id"], dry_run=False, confirm=True)
+
+    assert result["status"] == "completed"
+    assert result["completed_count"] == 1
+    assert result["work"]["aweme_id"] == "quota-one"
+    assert api.publish_comment.call_count == 1
+    assert store.count_published(account["id"], hours=24) == existing_count + 1

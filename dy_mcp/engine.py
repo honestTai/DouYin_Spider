@@ -1,4 +1,5 @@
 import os
+import time
 
 from .browser_runtime import collect_runtime_for_account
 from .store import AccountStore
@@ -46,6 +47,15 @@ class MultiAccountEngine:
             "二次身份验证", "scene=comment", "ticket/ts_sign", "同会话", "dtrait",
         ))
 
+    def _remaining_quota(self, account):
+        settings = self.store.settings()
+        global_hour = int(settings.get("global_per_hour", "20"))
+        return max(0, min(
+            global_hour - self.store.count_published(hours=1),
+            account["per_hour_limit"] - self.store.count_published(account["id"], hours=1),
+            account["per_day_limit"] - self.store.count_published(account["id"], hours=24),
+        ))
+
     def run(self, account_id, *, dry_run=True, confirm=False, aweme_id=""):
         account = self.store.get_account(account_id)
         if not account:
@@ -61,7 +71,6 @@ class MultiAccountEngine:
         image_path = (account["image_paths"][previous_runs % len(account["image_paths"])]
                       if account["image_paths"] else "")
         run_id = self.store.create_run(account_id, keyword, comment_text, dry_run)
-        reserved_id = ""
         auth = None
         try:
             runtime_env, runtime_info = self.runtime_loader(account)
@@ -77,6 +86,9 @@ class MultiAccountEngine:
             auth = self.auth_factory(
                 runtime_env["DY_COOKIES"], bootstrap_creator=False, proxies=proxies,
             )
+            searched_keywords = []
+            actual_strategy = account.get("content_strategy") or "engagement"
+            actual_publish_time = "1" if actual_strategy == "latest" else "0"
             if aweme_id and self.store.work_status(aweme_id, account_id):
                 candidates = []
             elif aweme_id:
@@ -91,20 +103,41 @@ class MultiAccountEngine:
                     "score": 0,
                 }]
             else:
-                works = self.api.search_some_general_work(
-                    auth, keyword, account["candidate_pool_size"], "1", "0",
-                )
-                candidates = [candidate_from_search(item) for item in works]
-                candidates = [item for item in candidates if item]
-                candidates = [
-                    item for item in candidates
-                    if item["digg_count"] >= account["min_digg_count"]
-                    and item["comment_count"] <= account["max_comment_count"]
-                    and not self.store.work_status(item["aweme_id"], account_id)
-                ]
-                candidates.sort(
-                    key=lambda item: (item["score"], item["digg_count"]), reverse=True,
-                )
+                latest = actual_strategy == "latest"
+                strategy_options = [("latest", "2", "1"), ("engagement", "1", "0")] \
+                    if latest else [("engagement", "1", "0")]
+                start = previous_runs % len(account["keywords"])
+                keywords = account["keywords"][start:] + account["keywords"][:start]
+                candidates = []
+                for search_keyword in keywords:
+                    for strategy, sort_type, publish_time in strategy_options:
+                        searched_keywords.append({"keyword": search_keyword, "strategy": strategy})
+                        works = self.api.search_some_general_work(
+                            auth, search_keyword, account["candidate_pool_size"],
+                            sort_type, publish_time,
+                        )
+                        candidates = [candidate_from_search(item) for item in works]
+                        candidates = [item for item in candidates if item]
+                        candidates = [
+                            item for item in candidates
+                            if item["digg_count"] >= account["min_digg_count"]
+                            and item["comment_count"] <= account["max_comment_count"]
+                            and not self.store.work_status(item["aweme_id"], account_id)
+                        ]
+                        if strategy == "engagement":
+                            candidates.sort(
+                                key=lambda item: (item["score"], item["digg_count"]), reverse=True,
+                            )
+                        if candidates:
+                            keyword = search_keyword
+                            actual_strategy = strategy
+                            actual_publish_time = publish_time
+                            break
+                    if candidates:
+                        break
+                self.store.update_run_keyword(run_id, keyword)
+
+            planned_count = min(account["batch_size"], self._remaining_quota(account))
             base = {
                 "account_id": account_id,
                 "account_name": account["name"],
@@ -113,63 +146,107 @@ class MultiAccountEngine:
                 "keyword": keyword,
                 "comment_text": comment_text,
                 "image_path": image_path,
+                "content_strategy": actual_strategy,
+                "publish_time": actual_publish_time,
+                "searched_keywords": searched_keywords,
                 "candidate_count": len(candidates),
+                "batch_size": planned_count,
+                "batch_interval_seconds": account["batch_interval_seconds"],
                 "dry_run": dry_run,
             }
+            planned_ids = [item["aweme_id"] for item in candidates[:planned_count]]
             if dry_run:
                 self.store.finish_run(
                     run_id, "preview", candidate_count=len(candidates),
-                    selected_id=candidates[0]["aweme_id"] if candidates else "",
+                    selected_id=planned_ids[0] if planned_ids else "", selected_ids=planned_ids,
                 )
                 return {
                     **base,
-                    "status": "preview",
+                    "status": "preview" if planned_count else "rate_limited",
+                    "planned_count": planned_count,
                     "works": candidates[:10],
                     "message": "仅预览，未上传图片或发布评论",
                 }
             if not candidates:
                 self.store.finish_run(run_id, "no_candidates")
                 return {**base, "status": "no_candidates", "message": "没有符合筛选条件的新作品"}
+            if planned_count <= 0:
+                self.store.finish_run(run_id, "rate_limited", candidate_count=len(candidates))
+                return {**base, "status": "rate_limited", "message": "已达到当前小时或每日评论限额"}
 
-            selected = None
-            for candidate in candidates:
-                if self.store.reserve_work(
+            results = []
+            stopped_error = ""
+            for index, candidate in enumerate(candidates[:planned_count]):
+                if not self.store.reserve_work(
                     candidate["aweme_id"], account_id, run_id,
                     candidate["digg_count"], candidate["comment_count"],
                 ):
-                    selected = candidate
-                    reserved_id = candidate["aweme_id"]
+                    continue
+                try:
+                    image_options = {"image_path": image_path} if image_path else {}
+                    response = self.api.publish_comment(
+                        auth, candidate["aweme_id"], comment_text, **image_options,
+                    )
+                    if response.get("status_code") not in (0, "0"):
+                        raise RuntimeError(
+                            f"评论接口返回 status_code={response.get('status_code')}: "
+                            f"{response.get('status_msg') or response.get('message') or '未知错误'}"
+                        )
+                    self.store.publish_work(candidate["aweme_id"], account_id)
+                    results.append({
+                        **candidate,
+                        "status": "completed",
+                        "comment_status": "published",
+                        "image_upload": response.get("image_upload"),
+                    })
+                except Exception as error:
+                    stopped_error = str(error)
+                    self.store.release_work(candidate["aweme_id"], account_id)
+                    results.append({
+                        **candidate,
+                        "status": "failed",
+                        "comment_status": "failed",
+                        "error": stopped_error,
+                    })
                     break
-            if selected is None:
-                self.store.finish_run(run_id, "no_candidates", candidate_count=len(candidates))
-                return {**base, "status": "no_candidates", "message": "候选作品已被其他任务占用"}
+                if (account["batch_interval_seconds"] and index < planned_count - 1):
+                    time.sleep(account["batch_interval_seconds"])
 
-            image_options = {"image_path": image_path} if image_path else {}
-            response = self.api.publish_comment(
-                auth, selected["aweme_id"], comment_text, **image_options,
-            )
-            if response.get("status_code") not in (0, "0"):
-                raise RuntimeError(
-                    f"评论接口返回 status_code={response.get('status_code')}: "
-                    f"{response.get('status_msg') or response.get('message') or '未知错误'}"
-                )
-            self.store.publish_work(reserved_id, account_id)
+            published = [item for item in results if item["status"] == "completed"]
+            failed = [item for item in results if item["status"] == "failed"]
+            selected_ids = [item["aweme_id"] for item in published]
+            if failed:
+                status = "partial" if published else "failed"
+            elif published:
+                status = "completed"
+            else:
+                status = "no_candidates"
             self.store.finish_run(
-                run_id, "completed", candidate_count=len(candidates), selected_id=reserved_id,
+                run_id, status, candidate_count=len(candidates),
+                selected_id=selected_ids[0] if selected_ids else "",
+                selected_ids=selected_ids, error=stopped_error or None,
             )
-            self.store.set_account_status(account_id, "active")
+            account_status = "active"
+            if stopped_error and self._is_verification_error(stopped_error):
+                account_status = "verification_required"
+            self.store.set_account_status(account_id, account_status, stopped_error or None)
             return {
                 **base,
-                "status": "completed",
-                "comment_status": "published",
-                "image_upload": response.get("image_upload"),
-                "work": selected,
+                "status": status,
+                "comment_status": "published" if published and not failed else status,
+                "account_status": account_status,
+                "completed_count": len(published),
+                "failed_count": len(failed),
+                "works": results,
+                "work": published[0] if published else None,
+                "image_upload": next(
+                    (item["image_upload"] for item in published if item.get("image_upload")), None,
+                ),
+                "error": stopped_error or None,
             }
         except Exception as error:
             message = str(error)
-            if reserved_id:
-                self.store.release_work(reserved_id, account_id)
-            self.store.finish_run(run_id, "failed", selected_id=reserved_id, error=message)
+            self.store.finish_run(run_id, "failed", error=message)
             status = "verification_required" if self._is_verification_error(message) else "active"
             self.store.set_account_status(account_id, status, message)
             return {
@@ -177,10 +254,13 @@ class MultiAccountEngine:
                 "run_id": run_id,
                 "keyword": keyword,
                 "comment_text": comment_text,
+                "image_path": image_path,
                 "dry_run": dry_run,
                 "status": "failed",
                 "comment_status": "failed",
                 "account_status": status,
+                "completed_count": 0,
+                "failed_count": 1,
                 "error": message,
             }
         finally:
