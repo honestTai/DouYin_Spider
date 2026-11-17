@@ -1113,6 +1113,7 @@ class DouyinAuth:
             from builder.header import HeaderBuilder
             cert, _sn = fetch_server_cert(
                 aid, self.cookie_str, origin=origin, user_agent=HeaderBuilder.ua,
+                proxies=self._proxies,
             )
             self.server_cert = cert
             key = derive_ecdh_key(self.private_key, cert)
@@ -1315,7 +1316,7 @@ class DouyinAuth:
             return self._ms_cache
         tok = ""
         try:
-            tok = generate_dynamic_msToken(ttwid=self._ttwid)
+            tok = generate_dynamic_msToken(ttwid=self._ttwid, proxies=self._proxies)
         except Exception:
             tok = ""
         if tok:

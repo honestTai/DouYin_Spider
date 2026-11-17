@@ -28,3 +28,6 @@ blackboxprotobuf
 backports.zstd ; python_version<'3.14'
 rocksdict==0.3.29
 jsbeautifier==2.0.3
+
+# Agent 接入：dy_mcp/server.py 的 MCP stdio 服务。
+mcp>=1.0,<2

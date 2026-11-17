@@ -205,7 +205,7 @@ def generate_webid(auth=None, url=""):
 
 
 def generate_csrf_token(cookies_str, origin='https://www.douyin.com',
-                        path='/service/2/abtest_config/', referer=None):
+                        path='/service/2/abtest_config/', referer=None, proxies=None):
     """向站点换取 `x-secsdk-csrf-token`（响应头 `X-Ware-Csrf-Token`）。
 
     **必须按子域取**：csrf token 与 `csrf_session_id` 绑定，creator 域拿 www 域的
@@ -230,7 +230,8 @@ def generate_csrf_token(cookies_str, origin='https://www.douyin.com',
             'accept-language': get_profile()["accept_language"],
         }
         response = requests.head(origin + path, headers=headers,
-                                 cookies=trans_cookies(cookies_str), verify=False)
+                                 cookies=trans_cookies(cookies_str), verify=False,
+                                 proxies=proxies)
         parts = response.headers['X-Ware-Csrf-Token'].split(',')
         return parts[1], parts[4]
     except Exception as e:

@@ -182,6 +182,34 @@ python dy_apis/douyin_recv_msg.py
 python quick_publish.py
 ```
 
+### MCP：搜索作品、评论并私信作者
+
+`dy_mcp/server.py` 只向 Agent 暴露一个 `run_engagement` 工具，流程为“关键词搜索相关作品 → 发布评论 → 私信作品作者”。需要 Python 3.10+，安装 `requirements.txt` 中的依赖后，在 `.env` 配置 `DY_COOKIES` 及写接口所需的同会话凭据。
+
+可选代理池使用 JSON 数组或逗号分隔地址：
+
+```dotenv
+DY_PROXY_POOL='["http://user:pass@proxy-one:8080", "http://user:pass@proxy-two:8080"]'
+```
+
+同一 Cookie 会固定分配到同一个代理，搜索、评论和私信不会在执行过程中切换出口 IP。
+
+在支持 MCP 的客户端中加入以下配置（路径替换为本机实际路径）：
+
+```json
+{
+  "mcpServers": {
+    "douyin-engagement": {
+      "command": "/absolute/path/DouYin_Spider/.venv/bin/python",
+      "args": ["-m", "dy_mcp.server"],
+      "cwd": "/absolute/path/DouYin_Spider"
+    }
+  }
+}
+```
+
+也可以直接用 `python -m dy_mcp.server` 启动 stdio 服务。工具默认 `dry_run=true`，只返回候选作品，不发布内容。真实执行需要同时传入 `dry_run=false`、`confirm=true`、`comment_text` 和 `message_text`；单次最多处理 20 个作品，任一作品失败后立即停止。请先用预览结果确认目标与文案。
+
 ### 🗝️注意事项
 - `main.py` 是爬虫入口，可根据需求自行修改调用
 - `dy_apis/douyin_api.py` 包含全部 API 接口封装，含直播间点赞、发消息、私信收发等

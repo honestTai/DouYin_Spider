@@ -124,7 +124,9 @@ def fetch_server_cert(aid, cookie_str, origin="https://www.douyin.com",
         # 实录里这个请求是带 x-secsdk-csrf-token 的，没传就自己去换一个
         try:
             from utils.dy_util import generate_csrf_token
-            csrf_token, _ = generate_csrf_token(cookie_str or "")
+            csrf_token, _ = generate_csrf_token(
+                cookie_str or "", origin=origin, referer=referer, proxies=proxies,
+            )
         except Exception:
             csrf_token = ""
     if csrf_token:
