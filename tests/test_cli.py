@@ -183,3 +183,92 @@ def test_config_updates_scheduler_without_starting_process(tmp_path):
         "status", enabled=False, dry_run=True, confirm=False,
         global_per_hour=15, min_interval_seconds=600, poll_seconds=None,
     )
+
+
+def test_browser_create_and_bind_existing_account(tmp_path, capsys):
+    from dy_mcp.local_browser import LocalBrowserManager
+
+    manager = LocalBrowserManager(tmp_path / "browsers")
+    store = cli.AccountStore(tmp_path / "cli.db")
+    account = store.upsert_account(
+        "本地账号", browser_type="webbridge", keywords=["AI"],
+        comment_texts=[], image_paths=["/tmp/poster.png"], per_day_limit=30,
+    )
+    with (
+        patch.object(cli, "local_browser_manager", return_value=manager),
+        patch("dy_mcp.local_browser.find_browser", return_value="/fake/chrome"),
+        patch("dy_mcp.local_browser.browser_version", return_value="157.0.8103.79"),
+    ):
+        created = cli.main([
+            "--db", str(store.path), "browser", "create", "local-one", "--port", "9333",
+        ])
+        capsys.readouterr()
+        bound = cli.main([
+            "--db", str(store.path), "browser", "bind", "local-one", account["id"],
+        ])
+
+    assert created == 0
+    assert bound == 0
+    result = json.loads(capsys.readouterr().out)
+    saved = store.get_account(account["id"])
+    assert result["local_profile"] == "local-one"
+    assert saved["browser_type"] == "chrome"
+    assert saved["cdp_url"] == "http://127.0.0.1:9333"
+    assert saved["image_paths"] == ["/tmp/poster.png"]
+    assert saved["per_day_limit"] == 30
+
+
+def test_camoufox_create_and_bind_existing_account(tmp_path, capsys):
+    from dy_mcp.camoufox_browser import CamoufoxManager
+    from dy_mcp.local_browser import LocalBrowserManager
+
+    local_manager = LocalBrowserManager(tmp_path / "chrome")
+    camoufox_manager = CamoufoxManager(tmp_path / "camoufox")
+    store = cli.AccountStore(tmp_path / "cli.db")
+    account = store.upsert_account(
+        "Firefox 账号", browser_type="webbridge", keywords=["AI"],
+        comment_texts=[], image_paths=["/tmp/poster.png"], per_day_limit=40,
+    )
+    with (
+        patch.object(cli, "local_browser_manager", return_value=local_manager),
+        patch.object(cli, "camoufox_browser_manager", return_value=camoufox_manager),
+    ):
+        created = cli.main([
+            "--db", str(store.path), "browser", "create", "firefox-one",
+            "--engine", "camoufox", "--port", "9555", "--platform", "MacIntel",
+            "--screen-width", "1920", "--screen-height", "1080",
+            "--window-width", "1440", "--window-height", "900",
+        ])
+        output = capsys.readouterr().out
+        bound = cli.main([
+            "--db", str(store.path), "browser", "bind", "firefox-one", account["id"],
+        ])
+
+    assert created == 0
+    assert bound == 0
+    assert '"token"' not in output
+    saved = store.get_account(account["id"])
+    profile = camoufox_manager.get("firefox-one")
+    assert saved["browser_type"] == "camoufox"
+    assert saved["cdp_url"] == "http://127.0.0.1:9555"
+    assert saved["image_paths"] == ["/tmp/poster.png"]
+    assert saved["per_day_limit"] == 40
+    assert profile["os"] == "macos"
+    assert profile["fingerprint_config"] == {}
+
+
+def test_camoufox_rejects_chrome_only_overrides(tmp_path, capsys):
+    from dy_mcp.camoufox_browser import CamoufoxManager
+    from dy_mcp.local_browser import LocalBrowserManager
+
+    with (
+        patch.object(cli, "local_browser_manager", return_value=LocalBrowserManager(tmp_path / "chrome")),
+        patch.object(cli, "camoufox_browser_manager", return_value=CamoufoxManager(tmp_path / "camoufox")),
+    ):
+        returncode = cli.main([
+            "--db", str(tmp_path / "cli.db"), "browser", "create", "firefox-one",
+            "--engine", "camoufox", "--port", "9555", "--cpu", "8",
+        ])
+
+    assert returncode == 2
+    assert "--cpu" in capsys.readouterr().err

@@ -310,6 +310,75 @@ WebBridge 使用当前已连接的 Chrome 登录会话，不需要额外调试�
 
 `proxy_url` 必须与该浏览器的真实网络出口一致；只修改 API 代理并不能改变浏览器出口。
 
+### 本地指纹环境（无需 AdsPower）
+
+本次实现内容：
+
+- 新增 Chrome/CDP 与 Camoufox/Firefox 两种本地环境，不再强制依赖 AdsPower。
+- 使用 BrowserForge 生成 Chrome 指纹，使用 Camoufox 内核生成 Firefox 指纹；首次启动后固定保存，重启不重新随机生成。
+- 每个环境拥有独立用户目录、控制端口和可选 HTTP/SOCKS5 代理；Camoufox 支持代理认证及按出口 IP 匹配地理位置。
+- CLI 统一支持环境创建、列表、状态、启动、停止和账号绑定，原有评论关键词、图片、文案及限额配置保持不变。
+- 账号凭证刷新同时识别 Chrome 和 Firefox；本地控制服务仅监听回环地址，状态输出不包含控制令牌、完整指纹或代理密码。
+- 浏览器数据和控制凭证保存在 Git 忽略目录中，并新增环境管理、指纹固定、CLI 和运行时采集测试。
+
+本地环境管理器会为每个账号保存固定指纹、独立 Chrome 用户目录、代理和 CDP 端口。新环境默认使用 [BrowserForge](https://github.com/daijro/browserforge) 的贝叶斯生成网络，从真实流量分布中生成互相关联的 UA、Client Hints、CPU、内存、屏幕、WebGL 和编解码器，并将 UA 完整版本对齐到本机浏览器。每个环境只在创建时抽样一次，之后固定不变；已有环境不会被自动改写。
+
+它使用 CDP 预加载脚本，不是完整修改 Chromium 内核；Canvas 像素、Audio、真实字体、WebRTC、TLS 和硬件渲染仍受本机影响，不能承诺绕过平台验证。若需要内核级方案，可参考 Firefox 系的 [Camoufox](https://github.com/daijro/camoufox)，但它不能直接替换这里的 Chrome/CDP 链路。
+
+```bash
+# 创建并启动；自动寻找 Chrome，也可用 --executable 指定路径
+.venv/bin/python douyin_cli.py browser create account1 --port 9222 \
+  --proxy-url "http://user:pass@127.0.0.1:8080" \
+  --platform MacIntel --languages "zh-CN,zh" \
+  --cpu 8 --memory 16 --screen-width 1920 --screen-height 1080 \
+  --window-width 1440 --window-height 900 --timezone Asia/Shanghai --start
+
+# 查看、启动和停止本地环境
+.venv/bin/python douyin_cli.py browser list
+.venv/bin/python douyin_cli.py browser status account1
+.venv/bin/python douyin_cli.py browser start account1
+.venv/bin/python douyin_cli.py browser stop account1
+```
+
+在打开的浏览器中登录抖音，然后把环境绑定到现有评论账号并刷新凭证：
+
+```bash
+.venv/bin/python douyin_cli.py browser bind account1 账号ID
+.venv/bin/python douyin_cli.py refresh 账号ID
+```
+
+绑定只修改浏览器类型、CDP 和代理，账号的关键词、图片、文案及限额保持不变。环境配置、浏览器数据、代理认证和运行日志保存在 `.kimi-code/local-browsers/`，该目录已加入 Git 忽略。
+
+### Camoufox 内核级 Firefox 环境
+
+Camoufox 是带内核补丁的 Firefox，不是普通 Firefox。它通过 C++ 返回 navigator、屏幕、WebGL、字体、Audio 和 WebRTC 等指纹，Chrome 专用的 UA、CPU、内存和 WebGL 覆盖参数不适用于此后端。
+
+```bash
+# 安装 Python 依赖和 Camoufox 定制浏览器；只需执行一次
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m camoufox fetch
+
+# 创建并启动；--platform 可映射 MacIntel、Win32 或 Linux
+.venv/bin/python douyin_cli.py browser create firefox1 \
+  --engine camoufox --port 9555 --platform MacIntel \
+  --languages "zh-CN,zh" --window-width 1440 --window-height 900 --start
+
+# 可选：为环境配置独立代理，并自动按出口 IP 匹配地理位置
+.venv/bin/python douyin_cli.py browser create firefox2 \
+  --engine camoufox --port 9556 \
+  --proxy-url "http://user:pass@127.0.0.1:8080" --start
+```
+
+首次启动时会生成并保存完整内核指纹，后续启动固定沿用。登录后在浏览器中保持抖音会话，再绑定并刷新：
+
+```bash
+.venv/bin/python douyin_cli.py browser bind firefox1 账号ID
+.venv/bin/python douyin_cli.py refresh 账号ID
+.venv/bin/python douyin_cli.py browser stop firefox1
+```
+
+每个环境使用独立持久化目录和仅监听 `127.0.0.1` 的控制服务；控制请求需要环境内随机令牌，状态输出不会返回令牌或代理密码。凭证采集通过一个仅匹配抖音域名的 MAIN world 扩展完成。环境数据位于 `.kimi-code/camoufox-browsers/`，已加入 Git 忽略。
+
 ### Firefox BiDi
 
 ```bash

@@ -186,12 +186,12 @@ class AccountStore:
         image_paths = [str(item).strip() for item in (image_paths or []) if str(item).strip()]
         if not name:
             raise ValueError("账号名称不能为空")
-        if browser_type not in {"adspower", "webbridge", "chrome", "edge", "firefox"}:
-            raise ValueError("browser_type 只支持 adspower、webbridge、chrome、edge、firefox")
+        if browser_type not in {"adspower", "webbridge", "chrome", "edge", "firefox", "camoufox"}:
+            raise ValueError("browser_type 只支持 adspower、webbridge、chrome、edge、firefox、camoufox")
         if browser_type == "adspower" and not profile_id and not profile_no:
             raise ValueError("AdsPower 账号必须配置 profile_id 或 profile_no")
-        if browser_type in {"chrome", "edge", "firefox"} and not cdp_url:
-            raise ValueError("本地浏览器账号必须配置 cdp_url；Firefox 使用 BiDi WebSocket 地址")
+        if browser_type in {"chrome", "edge", "firefox", "camoufox"} and not cdp_url:
+            raise ValueError("本地浏览器账号必须配置连接地址；Firefox 使用 BiDi，Camoufox 使用本机控制地址")
         if content_strategy not in {"engagement", "latest", "hashtag"}:
             raise ValueError("content_strategy 只支持 engagement、latest 或 hashtag")
         if not 1 <= batch_size <= 10:

@@ -64,7 +64,7 @@ def add_account_options(parser, *, creating=False):
     parser.add_argument("--profile-no", help="AdsPower 环境编号")
     parser.add_argument(
         "--browser-type",
-        choices=["adspower", "webbridge", "chrome", "edge", "firefox"],
+        choices=["adspower", "webbridge", "chrome", "edge", "firefox", "camoufox"],
         help="浏览器环境类型",
     )
     parser.add_argument("--cdp-url", help="Chrome/Edge CDP 或 Firefox BiDi 地址")
@@ -216,6 +216,141 @@ def list_adspower_profiles():
     return {"count": len(profiles), "profiles": profiles}
 
 
+def local_browser_manager():
+    from .local_browser import LocalBrowserManager
+
+    return LocalBrowserManager()
+
+
+def camoufox_browser_manager():
+    from .camoufox_browser import CamoufoxManager
+
+    return CamoufoxManager()
+
+
+def browser_managers():
+    return [local_browser_manager(), camoufox_browser_manager()]
+
+
+def find_browser_profile(name):
+    matches = []
+    for manager in browser_managers():
+        try:
+            matches.append((manager, manager.get(name)))
+        except ValueError:
+            continue
+    if not matches:
+        raise ValueError(f"本地浏览器环境不存在: {name}")
+    if len(matches) > 1:
+        raise ValueError(f"多个后端存在同名环境: {name}")
+    return matches[0]
+
+
+def browser_fingerprint(args):
+    languages = args.languages.replace("，", ",").split(",") if args.languages else None
+    return {
+        "ua": args.user_agent,
+        "platform": args.platform,
+        "languages": [item.strip() for item in languages if item.strip()] if languages else None,
+        "cpu": args.cpu,
+        "memory": args.memory,
+        "timezone": args.timezone,
+        "screen": {
+            "width": args.screen_width, "height": args.screen_height,
+            "availWidth": args.avail_width, "availHeight": args.avail_height,
+        },
+        "window": {
+            "innerWidth": args.window_width, "innerHeight": args.window_height,
+            "outerWidth": args.window_width, "outerHeight": args.window_height,
+        },
+        "webgl": {"vendor": args.webgl_vendor, "renderer": args.webgl_renderer},
+    }
+
+
+def bind_browser_account(store, account_id, profile):
+    account = store.get_account(account_id)
+    if not account:
+        raise ValueError("账号不存在")
+    saved = store.upsert_account(
+        account["name"], account_id=account_id, browser_type=profile.get("engine", "chrome"),
+        cdp_url=profile["cdp_url"], proxy_url=profile["proxy_url"],
+        keywords=account["keywords"], comment_texts=account["comment_texts"],
+        image_paths=account["image_paths"], enabled=account["enabled"],
+        per_hour_limit=account["per_hour_limit"], per_day_limit=account["per_day_limit"],
+        min_digg_count=account["min_digg_count"], max_comment_count=account["max_comment_count"],
+        candidate_pool_size=account["candidate_pool_size"],
+        content_strategy=account["content_strategy"], batch_size=account["batch_size"],
+        batch_interval_seconds=account["batch_interval_seconds"],
+    )
+    return {"status": "saved", "local_profile": profile["name"], "account": saved}
+
+
+def create_camoufox_profile(manager, args):
+    unsupported = {
+        "--user-agent": args.user_agent,
+        "--cpu": args.cpu,
+        "--memory": args.memory,
+        "--avail-width": args.avail_width,
+        "--avail-height": args.avail_height,
+        "--webgl-vendor": args.webgl_vendor,
+        "--webgl-renderer": args.webgl_renderer,
+        "--timezone": args.timezone,
+    }
+    used = [name for name, value in unsupported.items() if value is not None]
+    if used:
+        raise ValueError(f"Camoufox 由内核统一管理这些字段，请勿使用: {', '.join(used)}")
+    if bool(args.window_width) != bool(args.window_height):
+        raise ValueError("Camoufox 的 --window-width 和 --window-height 必须同时设置")
+    from .fingerprint_generator import host_operating_system
+
+    languages = args.languages.replace("，", ",").split(",") if args.languages else None
+    return manager.create(
+        args.name, args.port, executable=args.executable or "",
+        proxy_url=args.proxy_url or "", os_name=host_operating_system(args.platform),
+        languages=[item.strip() for item in languages if item.strip()] if languages else None,
+        screen={key: value for key, value in {
+            "width": args.screen_width, "height": args.screen_height,
+        }.items() if value is not None},
+        window={"width": args.window_width, "height": args.window_height} if args.window_width else None,
+    )
+
+
+def browser_command(store, args):
+    action = args.browser_command
+    if action == "create":
+        manager = camoufox_browser_manager() if args.engine == "camoufox" else local_browser_manager()
+        for backend in browser_managers():
+            for existing in backend.list():
+                if existing["name"] == args.name or existing["port"] == args.port:
+                    raise ValueError("环境名称或端口已被其他本地环境使用")
+        if args.engine == "camoufox":
+            profile = create_camoufox_profile(manager, args)
+        else:
+            profile = manager.create(
+                args.name, args.port, executable=args.executable or "",
+                proxy_url=args.proxy_url or "", fingerprint=browser_fingerprint(args),
+            )
+        if args.start:
+            profile = manager.start(args.name)
+            return {"status": "started", "profile": profile}
+        return {"status": "created", "profile": manager.public(profile, running=False)}
+    if action == "list":
+        profiles = []
+        for manager in browser_managers():
+            profiles.extend(manager.list_status())
+        return {"count": len(profiles), "profiles": profiles}
+    manager, _profile = find_browser_profile(args.name)
+    if action == "start":
+        return {"status": "started", "profile": manager.start(args.name)}
+    if action == "stop":
+        return {"status": "stopped", "profile": manager.stop(args.name)}
+    if action in {"show", "status"}:
+        return {"profile": manager.status(args.name)}
+    if action == "bind":
+        return bind_browser_account(store, args.account_id, manager.get(args.name))
+    raise ValueError("未知浏览器命令")
+
+
 def account_list(store, scheduler):
     accounts = store.list_accounts()
     return {"count": len(accounts), "accounts": accounts, "scheduler": scheduler.status()}
@@ -255,6 +390,37 @@ def build_parser():
     commands.add_parser("status", help="查看后台进程与调度配置")
     commands.add_parser("accounts", help="查看账号、限额和最近执行状态")
     commands.add_parser("profiles", help="列出 AdsPower 浏览器环境")
+
+    browser = commands.add_parser("browser", help="管理不依赖 AdsPower 的本地指纹浏览器")
+    browser_commands = browser.add_subparsers(dest="browser_command", required=True)
+    browser_create = browser_commands.add_parser("create", help="创建固定指纹和独立目录")
+    browser_create.add_argument("name", help="环境名称，字母/数字/下划线/连字符")
+    browser_create.add_argument("--engine", choices=["chrome", "camoufox"], default="chrome", help="浏览器后端")
+    browser_create.add_argument("--port", type=int, required=True, help="独立 CDP 或 Camoufox 控制端口")
+    browser_create.add_argument("--executable", help="浏览器可执行文件路径")
+    browser_create.add_argument("--proxy-url", help="独立代理，可包含用户名和密码")
+    browser_create.add_argument("--user-agent", help="固定 User-Agent")
+    browser_create.add_argument("--platform", help="navigator.platform，例如 MacIntel 或 Win32")
+    browser_create.add_argument("--languages", help="语言，逗号分隔，例如 zh-CN,zh")
+    browser_create.add_argument("--cpu", type=int, help="navigator.hardwareConcurrency")
+    browser_create.add_argument("--memory", type=int, help="navigator.deviceMemory")
+    browser_create.add_argument("--screen-width", type=int, help="屏幕宽度")
+    browser_create.add_argument("--screen-height", type=int, help="屏幕高度")
+    browser_create.add_argument("--avail-width", type=int, help="可用屏幕宽度")
+    browser_create.add_argument("--avail-height", type=int, help="可用屏幕高度")
+    browser_create.add_argument("--window-width", type=int, help="窗口宽度")
+    browser_create.add_argument("--window-height", type=int, help="窗口高度")
+    browser_create.add_argument("--webgl-vendor", help="WebGL vendor")
+    browser_create.add_argument("--webgl-renderer", help="WebGL renderer")
+    browser_create.add_argument("--timezone", help="时区，例如 Asia/Shanghai")
+    browser_create.add_argument("--start", action="store_true", help="创建后立即启动")
+    for action in ("start", "stop", "show", "status"):
+        browser_action = browser_commands.add_parser(action, help=f"{action} 本地浏览器环境")
+        browser_action.add_argument("name")
+    browser_commands.add_parser("list", help="列出本地浏览器环境")
+    browser_bind = browser_commands.add_parser("bind", help="把本地环境绑定到现有评论账号")
+    browser_bind.add_argument("name")
+    browser_bind.add_argument("account_id")
 
     account = commands.add_parser("account", help="创建或修改账号配置")
     account_commands = account.add_subparsers(dest="command", required=True)
@@ -341,6 +507,8 @@ def main(argv=None):
             result = account_list(store, scheduler)
         elif args.command == "profiles":
             result = list_adspower_profiles()
+        elif args.command == "browser":
+            result = browser_command(store, args)
         elif args.command in {"create", "set"}:
             result = upsert_account(store, args)
         elif args.command == "show":

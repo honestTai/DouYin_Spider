@@ -25,7 +25,7 @@ def build_runtime(cookie_header, fingerprint, credentials, runtime_info):
     web = _decode_wrapped(credentials.get("web"), "ticket/ts_sign")
     keys = _decode_wrapped(credentials.get("keys"), "浏览器私钥")
     ua = fingerprint["ua"]
-    browser_version = re.search(r"Chrome/([\d.]+)", ua)
+    browser_version = re.search(r"(?:Chrome|Firefox)/([\d.]+)", ua)
     platform = fingerprint.get("platform", "Win32")
     if platform == "MacIntel":
         os_name = "macOS"
@@ -104,7 +104,7 @@ def collect_cdp_page(client, session_id=""):
     return fingerprint, credentials
 
 
-def collect_chromium(cdp_url, browser_type):
+def collect_chromium(cdp_url, browser_type, fingerprint=None):
     if cdp_url.startswith("http"):
         with urllib.request.urlopen(cdp_url.rstrip("/") + "/json/version", timeout=10) as response:
             cdp_url = json.load(response)["webSocketDebuggerUrl"]
@@ -115,6 +115,10 @@ def collect_chromium(cdp_url, browser_type):
         target_id = target["targetId"]
         attached = client.call("Target.attachToTarget", {"targetId": target_id, "flatten": True})
         session_id = attached["sessionId"]
+        if fingerprint:
+            from .local_browser import apply_fingerprint
+
+            apply_fingerprint(client, session_id, fingerprint)
         fingerprint, credentials = collect_cdp_page(client, session_id)
         result = client.call("Network.getCookies", {"urls": [DOUYIN_URL]}, session_id)
         header = cookie_header(result.get("cookies", []))
@@ -220,6 +224,45 @@ def collect_firefox(cdp_url):
     })
 
 
+def collect_camoufox_context(context):
+    page = context.new_page()
+    try:
+        page.goto(DOUYIN_URL, wait_until="domcontentloaded", timeout=60000)
+        credentials = {}
+        for _ in range(20):
+            time.sleep(0.5)
+            raw = page.evaluate("mw:" + CREDENTIAL_SCRIPT)
+            credentials = json.loads(raw or "{}")
+            if credentials.get("dtrait"):
+                break
+        fingerprint = json.loads(page.evaluate("mw:" + FINGERPRINT_SCRIPT) or "{}")
+        header = cookie_header(context.cookies([DOUYIN_URL]))
+    finally:
+        page.close()
+    return build_runtime(header, fingerprint, credentials, {
+        "browser_type": "camoufox",
+        "connection": "Camoufox local control",
+    })
+
+
+def collect_camoufox(control_url):
+    from urllib.error import HTTPError
+
+    from .camoufox_browser import CamoufoxManager
+
+    profile = CamoufoxManager().find_by_cdp(control_url)
+    if not profile:
+        raise ValueError("找不到对应的 Camoufox 本地环境")
+    try:
+        result = CamoufoxManager()._request(profile, "/collect", method="POST", timeout=90)
+    except HTTPError as error:
+        detail = json.loads(error.read().decode() or "{}").get("error") or str(error)
+        raise RuntimeError(f"Camoufox 凭证采集失败: {detail}") from error
+    info = result["runtime_info"]
+    info["local_profile"] = profile["name"]
+    return result["runtime_env"], info
+
+
 def collect_runtime_for_account(account):
     browser_type = account.get("browser_type") or "adspower"
     if browser_type == "adspower":
@@ -229,9 +272,19 @@ def collect_runtime_for_account(account):
     elif browser_type == "webbridge":
         env, info = collect_webbridge(account["id"])
     elif browser_type in {"chrome", "edge"}:
-        env, info = collect_chromium(account["cdp_url"], browser_type)
+        from .local_browser import LocalBrowserManager
+
+        local_profile = LocalBrowserManager().find_by_cdp(account["cdp_url"])
+        env, info = collect_chromium(
+            account["cdp_url"], browser_type,
+            fingerprint=local_profile["fingerprint"] if local_profile else None,
+        )
+        if local_profile:
+            info["local_profile"] = local_profile["name"]
     elif browser_type == "firefox":
         env, info = collect_firefox(account["cdp_url"])
+    elif browser_type == "camoufox":
+        env, info = collect_camoufox(account["cdp_url"])
     else:
         raise ValueError(f"不支持的浏览器环境类型: {browser_type}")
     if account.get("proxy_url"):

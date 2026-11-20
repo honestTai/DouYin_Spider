@@ -31,3 +31,9 @@ jsbeautifier==2.0.3
 
 # Agent 接入：dy_mcp/server.py 的 MCP stdio 服务。
 mcp>=1.0,<2
+
+# 本地浏览器环境：按真实流量分布生成互相一致的设备指纹。
+browserforge==1.2.4
+
+# 可选内核级 Firefox 后端；浏览器二进制还需执行 python -m camoufox fetch。
+camoufox[geoip]==0.5.9

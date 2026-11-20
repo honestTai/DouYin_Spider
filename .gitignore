@@ -64,3 +64,5 @@ live.*/
 /.kimi-code/*.db
 /.kimi-code/*.db-*
 /.kimi-code/scheduler.pid
+/.kimi-code/local-browsers/
+/.kimi-code/camoufox-browsers/
