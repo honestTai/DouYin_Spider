@@ -16,14 +16,14 @@
 
 ## ❤️ Sponsor：HRouter
 
-**[HRouter](https://hrouter.net/home)** 是本项目维护者正在建设的模型接入、API Key 管理与用量跟踪平台，面向 AI 编码和应用开发。
+**[HRouter](https://hrouter.net/)** 是本项目维护者正在建设的模型接入、API Key 管理与用量跟踪平台，面向 AI 编码和应用开发。
 
 - **统一模型接入**：Claude、GPT、Gemini、Grok、DeepSeek、Qwen 等主流模型，一套 API 即可调用。
 - **按量使用**：无需分别订阅多个服务，充值余额、创建 API Key，即可按实际用量调用。
 - **请求可追溯**：集中管理密钥、模型路由和调用记录，便于核对成本与排查问题。
 - **与 MCP 配合**：HRouter 负责模型接入与用量管理，本项目负责本地浏览器、抖音执行与账号数据，二者独立部署。
 
-**[访问 HRouter 官网 →](https://hrouter.net/home)** · **[了解 HRouter Desktop →](https://github.com/honestTai/HRouter-Desktop)**
+**[访问 HRouter 官网 →](https://hrouter.net/)** · **[了解 HRouter Desktop →](https://github.com/honestTai/HRouter-Desktop)**
 
 ## 核心能力
 
